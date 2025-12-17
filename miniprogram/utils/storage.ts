@@ -241,3 +241,90 @@ export function aggregateDaily(events: EventRecord[], dateKey: string): StatsSum
   return sum
 }
 
+export type QuickAction = { type: EventType; label: string }
+const QUICK_ACTIONS_PREFIX = `${LOCAL_KEY_PREFIX}quick_actions_`
+function quickActionsKey(babyId: string) {
+  return `${QUICK_ACTIONS_PREFIX}${babyId}`
+}
+export function getQuickActions(babyId: string): QuickAction[] {
+  const key = quickActionsKey(babyId)
+  const list: QuickAction[] = wx.getStorageSync(key)
+  if (Array.isArray(list) && list.length) return list
+  const defaults: QuickAction[] = [
+    { type: 'feed', label: '吃奶' },
+    { type: 'drink', label: '喝水' },
+    { type: 'pee', label: '小便' },
+    { type: 'poop', label: '大便' },
+    { type: 'sleep', label: '睡觉' },
+    { type: 'wake', label: '醒来' },
+  ]
+  wx.setStorageSync(key, defaults)
+  return defaults
+}
+export function setQuickActions(babyId: string, actions: QuickAction[]) {
+  const key = quickActionsKey(babyId)
+  wx.setStorageSync(key, actions)
+}
+
+export async function updateEvent(rec: EventRecord): Promise<EventRecord> {
+  const database = initCloud()
+  const id = rec._id || rec.id
+  if (!id) return rec
+  let updated = false
+  if (database && rec._id) {
+    try {
+      await database.collection('events').doc(rec._id).update({
+        data: {
+          type: rec.type,
+          timestamp: rec.timestamp,
+          quantity: rec.quantity,
+          durationMinutes: rec.durationMinutes,
+          notes: rec.notes,
+          updatedAt: Date.now(),
+        },
+      })
+      updated = true
+    } catch (e) {}
+  }
+  if (!updated) {
+    const key = localEventsKey(rec.babyId)
+    const list: EventRecord[] = wx.getStorageSync(key) || []
+    const idx = list.findIndex((e) => e.id === rec.id || e._id === rec._id)
+    if (idx >= 0) {
+      const merged: EventRecord = {
+        ...list[idx],
+        type: rec.type,
+        timestamp: rec.timestamp,
+        quantity: rec.quantity,
+        durationMinutes: rec.durationMinutes,
+        notes: rec.notes,
+      }
+      list[idx] = merged
+      wx.setStorageSync(key, list)
+    }
+  }
+  notifyListeners(rec.babyId)
+  return rec
+}
+
+export async function deleteEvent(babyId: string, idOrCloudId: string): Promise<void> {
+  const database = initCloud()
+  let removed = false
+  if (database) {
+    try {
+      await database.collection('events').doc(idOrCloudId).remove()
+      removed = true
+    } catch (e) {}
+  }
+  const key = localEventsKey(babyId)
+  const list: EventRecord[] = wx.getStorageSync(key) || []
+  const filtered = list.filter((e) => e.id !== idOrCloudId && e._id !== idOrCloudId)
+  if (filtered.length !== list.length) {
+    wx.setStorageSync(key, filtered)
+    removed = true
+  }
+  if (removed) {
+    notifyListeners(babyId)
+  }
+}
+

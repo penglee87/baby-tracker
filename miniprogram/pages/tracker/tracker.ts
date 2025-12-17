@@ -1,6 +1,8 @@
 import { formatTime } from '../../utils/util'
 import {
   addEvent,
+  updateEvent,
+  deleteEvent,
   aggregateDaily,
   EventRecord,
   EventType,
@@ -8,11 +10,14 @@ import {
   getCurrentBabyId,
   setCurrentBabyId,
   watchEvents,
+  getQuickActions,
+  setQuickActions,
 } from '../../utils/storage'
 
 // 定义带展示字段的记录类型，解决类型不匹配的波浪线警告
 interface EventRecordDisplay extends EventRecord {
   timeDisplay?: string
+  typeLabel?: string
 }
 
 Component({
@@ -32,6 +37,18 @@ Component({
     pendingType: '' as EventType | '',
     showQuantityModal: false,
     showDurationModal: false,
+    showEditModal: false,
+    editId: '',
+    editType: '' as EventType | '',
+    editTime: '',
+    editQuantity: 0,
+    editDuration: 0,
+    editNotes: '',
+    typeOptions: ['吃奶', '喝水', '小便', '大便', '睡觉', '醒来'],
+    // quick actions
+    quickActions: [] as Array<{ type: EventType; label: string }>,
+    editActionsMode: false,
+    addActionIndex: 0,
   },
   lifetimes: {
     attached() {
@@ -40,7 +57,8 @@ Component({
       const d = new Date()
       const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
       const inputTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
-      this.setData({ babyId, todayKey, inputTime })
+      const quickActions = getQuickActions(babyId)
+      this.setData({ babyId, todayKey, inputTime, quickActions })
       this.startWatch()
     },
     detached() {
@@ -81,13 +99,125 @@ Component({
           const d = new Date(e.timestamp)
           const pad = (n: number) => n < 10 ? `0${n}` : `${n}`
           const timeDisplay = `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+          const rawType: any = (e as any).type
+          let typeStr = 'unknown'; // 默认为未知
+  
+          if (typeof rawType === 'string') {
+            typeStr = rawType;
+          } else if (rawType && typeof rawType === 'object') {
+            // 如果数据库里意外存成了对象，尝试尝试挽救（比如取 rawType.type），否则标记为 error
+            console.warn('数据异常: type 字段是对象', rawType);
+            typeStr = rawType.type || 'error'; 
+          }
+          const typeLabelMap: Record<string, string> = {
+            feed: '吃奶',
+            drink: '喝水',
+            pee: '小便',
+            poop: '大便',
+            sleep: '睡觉',
+            wake: '醒来',
+            tap: '未知',
+          }
+          const typeLabel = typeLabelMap[typeStr] || (typeStr || '未知')
           return {
             ...e,
-            timeDisplay
+            timeDisplay,
+            typeLabel
           }
         })
         
         this.setData({ events: recentEvents, statsText })
+      })
+    },
+    openItemActions(e: any) {
+      const id = e.currentTarget.dataset.id
+      const item = (this.data.events || []).find((r) => r.id === id || r._id === id)
+      if (!item) return
+      wx.showActionSheet({
+        itemList: ['编辑', '删除'],
+        success: (res) => {
+          if (res.tapIndex === 0) {
+            const d = new Date(item.timestamp)
+            const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
+            const editTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+            this.setData({
+              showEditModal: true,
+              editId: item._id || item.id || '',
+              editType: (typeof item.type === 'string' ? (item.type as EventType) : 'feed'),
+              editTime,
+              editQuantity: item.quantity || 0,
+              editDuration: item.durationMinutes || 0,
+              editNotes: item.notes || '',
+            })
+          } else if (res.tapIndex === 1) {
+            wx.showModal({
+              title: '确认删除',
+              content: '删除后不可恢复，确定删除该记录？',
+              success: (m) => {
+                if (m.confirm) {
+                  deleteEvent(this.data.babyId, id).then(() => {
+                    wx.showToast({ title: '已删除', icon: 'success' })
+                  })
+                }
+              },
+            })
+          }
+        },
+      })
+    },
+    onEditTypeChange(e: any) {
+      const idx = Number(e.detail.value || 0)
+      const map = ['feed', 'drink', 'pee', 'poop', 'sleep', 'wake']
+      this.setData({ editType: map[idx] as EventType })
+    },
+    onEditNotesInput(e: any) {
+      this.setData({ editNotes: e.detail.value })
+    },
+    onEditQuantityInput(e: any) {
+      this.setData({ editQuantity: Number(e.detail.value) || 0 })
+    },
+    onEditDurationInput(e: any) {
+      this.setData({ editDuration: Number(e.detail.value) || 0 })
+    },
+    onEditTimeChange(e: any) {
+      this.setData({ editTime: e.detail.value })
+    },
+    cancelEdit() {
+      this.setData({ showEditModal: false, editId: '', editNotes: '', editQuantity: 0, editDuration: 0 })
+    },
+    saveEdit() {
+      const babyId = this.data.babyId
+      const id = this.data.editId
+      const type = this.data.editType as EventType
+      if (!id || !type) {
+        wx.showToast({ title: '编辑信息不完整', icon: 'none' })
+        return
+      }
+      const ts = this.buildTimestampFromHHMM(this.data.editTime)
+      const rec: EventRecord = {
+        babyId,
+        type,
+        timestamp: ts,
+        notes: this.data.editNotes || '',
+      }
+      if (id.startsWith('6') || id.length >= 20) {
+        rec._id = id
+      } else {
+        rec.id = id
+      }
+      if (type === 'feed' || type === 'drink') {
+        rec.quantity = Number(this.data.editQuantity) || 0
+      } else {
+        rec.quantity = undefined
+      }
+      if (type === 'sleep') {
+        rec.durationMinutes = Number(this.data.editDuration) || 0
+      } else {
+        rec.durationMinutes = undefined
+      }
+      updateEvent(rec).then(() => {
+        this.setData({ showEditModal: false })
+        wx.showToast({ title: '已更新', icon: 'success' })
       })
     },
     stopWatch() {
@@ -108,10 +238,69 @@ Component({
       }
       this.setData({ pendingType: type, showTimeModal: true, inputTime: this.getNowTimeStr() })
     },
+    toggleEditActions() {
+      this.setData({ editActionsMode: !this.data.editActionsMode })
+    },
+    openAddAction() {
+      wx.showActionSheet({
+        itemList: this.data.typeOptions,
+        success: (res) => {
+          const idx = res.tapIndex
+          const map = ['feed', 'drink', 'pee', 'poop', 'sleep', 'wake']
+          const type = map[idx] as EventType
+          const exists = (this.data.quickActions || []).some((a) => a.type === type)
+          if (exists) {
+            wx.showToast({ title: '已存在该行为', icon: 'none' })
+            return
+          }
+          const label = this.data.typeOptions[idx]
+          const next = [...(this.data.quickActions || []), { type, label }]
+          this.setData({ quickActions: next })
+          setQuickActions(this.data.babyId, next)
+          wx.showToast({ title: '已添加', icon: 'success' })
+        },
+      })
+    },
+    moveActionUp(e: any) {
+      const i = Number(e.currentTarget.dataset.index)
+      const list = [...(this.data.quickActions || [])]
+      if (i <= 0) return
+      ;[list[i - 1], list[i]] = [list[i], list[i - 1]]
+      this.setData({ quickActions: list })
+      setQuickActions(this.data.babyId, list)
+    },
+    moveActionDown(e: any) {
+      const i = Number(e.currentTarget.dataset.index)
+      const list = [...(this.data.quickActions || [])]
+      if (i >= list.length - 1) return
+      ;[list[i + 1], list[i]] = [list[i], list[i + 1]]
+      this.setData({ quickActions: list })
+      setQuickActions(this.data.babyId, list)
+    },
+    moveActionTop(e: any) {
+      const i = Number(e.currentTarget.dataset.index)
+      const list = [...(this.data.quickActions || [])]
+      if (i <= 0) return
+      const [it] = list.splice(i, 1)
+      list.unshift(it)
+      this.setData({ quickActions: list })
+      setQuickActions(this.data.babyId, list)
+    },
+    removeAction(e: any) {
+      const i = Number(e.currentTarget.dataset.index)
+      const list = [...(this.data.quickActions || [])]
+      list.splice(i, 1)
+      this.setData({ quickActions: list })
+      setQuickActions(this.data.babyId, list)
+    },
     commitEvent(type?: EventType) {
       const nowTs = this.buildTimestampFromHHMM(this.data.inputTime)
       const babyId = this.data.babyId
-      const finalType = type || (this.data.pendingType as EventType)
+      const finalType = (typeof type === 'string' ? type : (this.data.pendingType as EventType))
+      if (!finalType) {
+        wx.showToast({ title: '请选择类型', icon: 'none' })
+        return
+      }
       const record: EventRecord = {
         babyId,
         type: finalType,

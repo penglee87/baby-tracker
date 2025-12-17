@@ -5,12 +5,21 @@
     <text class="stats">{{statsText}}</text>
   </view>
   <view class="quick-grid">
-    <button class="quick-btn feed" data-type="feed" bindtap="tapQuickAdd">吃奶</button>
-    <button class="quick-btn drink" data-type="drink" bindtap="tapQuickAdd">喝水</button>
-    <button class="quick-btn pee" data-type="pee" bindtap="tapQuickAdd">小便</button>
-    <button class="quick-btn poop" data-type="poop" bindtap="tapQuickAdd">大便</button>
-    <button class="quick-btn sleep" data-type="sleep" bindtap="tapQuickAdd">睡觉</button>
-    <button class="quick-btn wake" data-type="wake" bindtap="tapQuickAdd">醒来</button>
+    <block wx:for="{{quickActions}}" wx:key="type">
+      <view>
+        <button class="quick-btn" data-type="{{item.type}}" bindtap="tapQuickAdd">{{item.label}}</button>
+        <block wx:if="{{editActionsMode}}">
+          <view class="sort-controls">
+            <button size="mini" data-index="{{index}}" bindtap="moveActionUp">上移</button>
+            <button size="mini" data-index="{{index}}" bindtap="moveActionDown">下移</button>
+            <button size="mini" data-index="{{index}}" bindtap="moveActionTop">置顶</button>
+            <button size="mini" data-index="{{index}}" bindtap="removeAction">删除</button>
+          </view>
+        </block>
+      </view>
+    </block>
+    <button class="quick-btn" bindtap="openAddAction">添加行为</button>
+    <button class="quick-btn" bindtap="toggleEditActions">{{editActionsMode ? '完成排序' : '编辑排序'}}</button>
   </view>
   <view class="notes-row">
     <input class="notes-input" placeholder="备注（可选）" bindinput="notesInput" value="{{inputNotes}}" />
@@ -18,9 +27,9 @@
   <view class="list">
     <view class="list-title">最近记录</view>
     <block wx:for="{{events}}" wx:key="id">
-      <view class="item">
+      <view class="item" bindtap="openItemActions" data-id="{{item._id || item.id}}">
         <text class="time">{{item.timeDisplay}}</text>
-        <text class="type">{{item.type}}</text>
+        <text class="type">{{item.typeLabel}}</text>
         <block wx:if="{{item.quantity}}">
           <text class="meta">{{item.quantity}} ml</text>
         </block>
@@ -82,6 +91,25 @@
       <view class="modal-actions">
         <button class="cancel" bindtap="cancelModal">取消</button>
         <button class="confirm" bindtap="confirmBabyId">确定</button>
+      </view>
+    </view>
+  </view>
+  
+  <view class="overlay" wx:if="{{showEditModal}}">
+    <view class="modal">
+      <text class="modal-title">编辑记录</text>
+      <picker mode="selector" range="{{typeOptions}}" bindchange="onEditTypeChange">
+        <view class="modal-input">类型：{{editType}}</view>
+      </picker>
+      <picker mode="time" value="{{editTime}}" bindchange="onEditTimeChange">
+        <view class="modal-input">时间：{{editTime}}</view>
+      </picker>
+      <input type="number" class="modal-input" placeholder="数量（ml）" bindinput="onEditQuantityInput" value="{{editQuantity}}" wx:if="{{editType==='feed'||editType==='drink'}}" />
+      <input type="number" class="modal-input" placeholder="时长（分钟）" bindinput="onEditDurationInput" value="{{editDuration}}" wx:if="{{editType==='sleep'}}" />
+      <input class="modal-input" placeholder="备注（可选）" bindinput="onEditNotesInput" value="{{editNotes}}" />
+      <view class="modal-actions">
+        <button class="cancel" bindtap="cancelEdit">取消</button>
+        <button class="confirm" bindtap="saveEdit">保存</button>
       </view>
     </view>
   </view>

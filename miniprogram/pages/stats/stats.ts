@@ -40,7 +40,7 @@ Component({
         const key = formatDateKey(dayStart)
         days.push(aggregateDaily(list, key))
       }
-      this.setData({ babyId, todayStats, weekStats: days })
+      this.setData({ babyId, todayStats, weekStats: days.reverse() })
     },
     async viewDayDetail(e: any) {
       const dateKey = e.currentTarget.dataset.date
