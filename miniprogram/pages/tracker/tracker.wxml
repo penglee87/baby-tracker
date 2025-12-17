@@ -1,0 +1,88 @@
+<view class="tracker-page">
+  <view class="header">
+    <text class="title">宝宝记录（{{todayKey}}）</text>
+    <text class="subtitle">当前宝宝：{{babyId}}</text>
+    <text class="stats">{{statsText}}</text>
+  </view>
+  <view class="quick-grid">
+    <button class="quick-btn feed" data-type="feed" bindtap="tapQuickAdd">吃奶</button>
+    <button class="quick-btn drink" data-type="drink" bindtap="tapQuickAdd">喝水</button>
+    <button class="quick-btn pee" data-type="pee" bindtap="tapQuickAdd">小便</button>
+    <button class="quick-btn poop" data-type="poop" bindtap="tapQuickAdd">大便</button>
+    <button class="quick-btn sleep" data-type="sleep" bindtap="tapQuickAdd">睡觉</button>
+    <button class="quick-btn wake" data-type="wake" bindtap="tapQuickAdd">醒来</button>
+  </view>
+  <view class="notes-row">
+    <input class="notes-input" placeholder="备注（可选）" bindinput="notesInput" value="{{inputNotes}}" />
+  </view>
+  <view class="list">
+    <view class="list-title">最近记录</view>
+    <block wx:for="{{events}}" wx:key="id">
+      <view class="item">
+        <text class="time">{{item.timeDisplay}}</text>
+        <text class="type">{{item.type}}</text>
+        <block wx:if="{{item.quantity}}">
+          <text class="meta">{{item.quantity}} ml</text>
+        </block>
+        <block wx:if="{{item.durationMinutes}}">
+          <text class="meta">{{item.durationMinutes}} 分钟</text>
+        </block>
+        <block wx:if="{{item.notes}}">
+          <text class="notes">{{item.notes}}</text>
+        </block>
+      </view>
+    </block>
+  </view>
+
+  <view class="overlay" wx:if="{{showQuantityModal}}">
+    <view class="modal">
+      <text class="modal-title">请输入毫升数</text>
+      <input type="number" class="modal-input" placeholder="数量（ml）" bindinput="quantityInput" value="{{inputQuantity}}" />
+      <picker mode="time" value="{{inputTime}}" bindchange="onTimeChange">
+        <view class="modal-input">时间：{{inputTime}}</view>
+      </picker>
+      <view class="modal-actions">
+        <button class="cancel" bindtap="cancelModal">取消</button>
+        <button class="confirm" bindtap="commitEvent">确定</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="overlay" wx:if="{{showDurationModal}}">
+    <view class="modal">
+      <text class="modal-title">请输入睡眠时长</text>
+      <input type="number" class="modal-input" placeholder="时长（分钟）" bindinput="durationInput" value="{{inputDuration}}" />
+      <picker mode="time" value="{{inputTime}}" bindchange="onTimeChange">
+        <view class="modal-input">时间：{{inputTime}}</view>
+      </picker>
+      <view class="modal-actions">
+        <button class="cancel" bindtap="cancelModal">取消</button>
+        <button class="confirm" bindtap="commitEvent">确定</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="overlay" wx:if="{{showTimeModal}}">
+    <view class="modal">
+      <text class="modal-title">请选择记录时间</text>
+      <picker mode="time" value="{{inputTime}}" bindchange="onTimeChange">
+        <view class="modal-input">时间：{{inputTime}}</view>
+      </picker>
+      <view class="modal-actions">
+        <button class="cancel" bindtap="cancelModal">取消</button>
+        <button class="confirm" bindtap="commitEvent">确定</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="overlay" wx:if="{{showBabyModal}}">
+    <view class="modal">
+      <text class="modal-title">输入共享码（同宝宝共用同一码）</text>
+      <input class="modal-input" placeholder="如：family-001" bindinput="babyIdInput" value="{{inputBabyId}}" />
+      <view class="modal-actions">
+        <button class="cancel" bindtap="cancelModal">取消</button>
+        <button class="confirm" bindtap="confirmBabyId">确定</button>
+      </view>
+    </view>
+  </view>
+</view>

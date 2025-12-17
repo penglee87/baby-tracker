@@ -1,0 +1,115 @@
+page, .stats-page {
+  min-height: 100vh;
+  background: #f7f8fa;
+}
+.header {
+  padding: 16px;
+}
+.title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.subtitle {
+  display: block;
+  margin-top: 4px;
+  color: #666;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 0 16px;
+  margin-top: 12px;
+}
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 8px 16px;
+  display: flex;
+  flex-direction: column;
+}
+.date {
+  color: #666;
+  margin-bottom: 4px;
+}
+.actions {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+/* Modal Styles */
+.overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  width: 80%;
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+}
+.modal-title {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 12px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.confirm {
+  background: #07c160;
+  color: #fff;
+  font-size: 14px;
+  padding: 4px 16px;
+}
+
+/* Detail List Styles */
+.detail-list {
+  background: #f9f9f9;
+  border-radius: 6px;
+}
+.item {
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.item:last-child {
+  border-bottom: none;
+}
+.time {
+  color: #888;
+  width: 44%;
+}
+.type {
+  width: 24%;
+  font-weight: 500;
+}
+.meta {
+  margin-left: 8px;
+  color: #333;
+}
+.notes {
+  width: 100%;
+  margin-top: 4px;
+  color: #666;
+  font-size: 12px;
+}
+.empty-tip {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+}

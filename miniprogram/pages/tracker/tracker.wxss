@@ -1,0 +1,117 @@
+page, .tracker-page {
+  min-height: 100vh;
+  background: #f7f8fa;
+}
+.header {
+  padding: 16px;
+}
+.title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.subtitle {
+  display: block;
+  margin-top: 4px;
+  color: #666;
+}
+.stats {
+  display: block;
+  margin-top: 8px;
+  color: #333;
+}
+.to-stats {
+  margin-top: 8px;
+}
+.switch-baby {
+  margin-top: 8px;
+}
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-gap: 8px;
+  padding: 16px;
+}
+.quick-btn {
+  background: #fff;
+  border-radius: 8px;
+}
+.notes-row {
+  padding: 0 16px 8px;
+}
+.notes-input {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+}
+.list-title {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+.list {
+  padding: 8px 16px 24px;
+}
+.item {
+  background: #fff;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.time {
+  color: #888;
+  width: 44%;
+}
+.type {
+  width: 24%;
+  font-weight: 500;
+}
+.meta {
+  margin-left: 8px;
+  color: #333;
+}
+.notes {
+  width: 100%;
+  margin-top: 4px;
+  color: #666;
+}
+.overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal {
+  width: 80%;
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+}
+.modal-title {
+  font-weight: 600;
+}
+.modal-input {
+  margin-top: 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 10px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.cancel {
+  margin-right: 8px;
+}
+.confirm {
+  background: #07c160;
+  color: #fff;
+}

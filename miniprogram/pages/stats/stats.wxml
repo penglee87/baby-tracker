@@ -1,0 +1,53 @@
+<view class="stats-page">
+  <view class="header">
+    <text class="title">统计</text>
+    <text class="subtitle">当前宝宝：{{babyId}}</text>
+  </view>
+  <view class="today">
+    <text class="section-title">今日（{{todayKey}}）</text>
+    <view class="card">
+      <text>吃奶：{{todayStats.feedCount}} 次（{{todayStats.feedMl}} ml）</text>
+      <text>喝水：{{todayStats.drinkCount}} 次（{{todayStats.drinkMl}} ml）</text>
+      <text>小便：{{todayStats.peeCount}} 次</text>
+      <text>大便：{{todayStats.poopCount}} 次</text>
+      <text>睡眠：{{todayStats.sleepSessions}} 段（{{todayStats.sleepMinutes}} 分钟）</text>
+    </view>
+  </view>
+  <view class="week">
+    <text class="section-title">最近 7 天（点击查看详情）</text>
+    <block wx:for="{{weekStats}}" wx:key="dateKey">
+      <view class="card" bindtap="viewDayDetail" data-date="{{item.dateKey}}">
+        <text class="date">{{item.dateKey}}</text>
+        <text>吃奶：{{item.feedCount}} 次（{{item.feedMl}} ml）</text>
+        <text>喝水：{{item.drinkCount}} 次（{{item.drinkMl}} ml）</text>
+        <text>小便：{{item.peeCount}} 次</text>
+        <text>大便：{{item.poopCount}} 次</text>
+        <text>睡眠：{{item.sleepSessions}} 段（{{item.sleepMinutes}} 分钟）</text>
+      </view>
+    </block>
+  </view>
+  <view class="actions">
+    <button bindtap="refresh">刷新</button>
+  </view>
+
+  <view class="overlay" wx:if="{{showDetailModal}}">
+    <view class="modal detail-modal">
+      <text class="modal-title">{{detailDate}} 记录明细</text>
+      <scroll-view scroll-y class="detail-list" style="max-height: 60vh;">
+        <block wx:for="{{detailEvents}}" wx:key="id">
+          <view class="item">
+            <text class="time">{{item.timeStr}}</text>
+            <text class="type">{{item.type}}</text>
+            <text class="meta" wx:if="{{item.quantity}}">{{item.quantity}}ml</text>
+            <text class="meta" wx:if="{{item.durationMinutes}}">{{item.durationMinutes}}分</text>
+            <text class="notes" wx:if="{{item.notes}}">{{item.notes}}</text>
+          </view>
+        </block>
+        <view wx:if="{{detailEvents.length === 0}}" class="empty-tip">暂无记录</view>
+      </scroll-view>
+      <view class="modal-actions">
+        <button class="confirm" bindtap="closeDetailModal">关闭</button>
+      </view>
+    </view>
+  </view>
+</view>
