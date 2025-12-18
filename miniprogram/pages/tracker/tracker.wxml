@@ -6,20 +6,36 @@
   </view>
   <view class="quick-grid">
     <block wx:for="{{quickActions}}" wx:key="type">
-      <view>
-        <button class="quick-btn" data-type="{{item.type}}" bindtap="tapQuickAdd">{{item.label}}</button>
+      <view class="grid-item">
+        <button class="quick-btn {{item.colorClass}}" data-type="{{item.type}}" bindtap="tapQuickAdd">
+          <text class="btn-icon">{{item.icon}}</text>
+          <text class="btn-label">{{item.label}}</text>
+        </button>
         <block wx:if="{{editActionsMode}}">
           <view class="sort-controls">
-            <button size="mini" data-index="{{index}}" bindtap="moveActionUp">上移</button>
-            <button size="mini" data-index="{{index}}" bindtap="moveActionDown">下移</button>
-            <button size="mini" data-index="{{index}}" bindtap="moveActionTop">置顶</button>
-            <button size="mini" data-index="{{index}}" bindtap="removeAction">删除</button>
+            <view class="sort-btn" data-index="{{index}}" bindtap="moveActionUp">⬆️</view>
+            <view class="sort-btn" data-index="{{index}}" bindtap="moveActionDown">⬇️</view>
+            <view class="sort-btn" data-index="{{index}}" bindtap="moveActionTop">🔝</view>
+            <view class="sort-btn delete-btn" data-index="{{index}}" bindtap="removeAction">❌</view>
           </view>
         </block>
       </view>
     </block>
-    <button class="quick-btn" bindtap="openAddAction">添加行为</button>
-    <button class="quick-btn" bindtap="toggleEditActions">{{editActionsMode ? '完成排序' : '编辑排序'}}</button>
+    
+    <!-- Add Action Button -->
+    <view class="grid-item">
+      <button class="quick-btn add-btn" bindtap="openAddAction">
+        <text class="btn-icon">➕</text>
+        <text class="btn-label">添加</text>
+      </button>
+    </view>
+  </view>
+  
+  <view class="section-divider">
+    <text class="section-title">快捷备注</text>
+    <view class="edit-toggle" bindtap="toggleEditActions">
+      <text>{{editActionsMode ? '完成排序' : '管理行为'}}</text>
+    </view>
   </view>
   <view class="notes-row">
     <input class="notes-input" placeholder="备注（可选）" bindinput="notesInput" value="{{inputNotes}}" />

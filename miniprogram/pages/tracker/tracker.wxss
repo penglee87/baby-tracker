@@ -27,13 +27,125 @@ page, .tracker-page {
 }
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-gap: 8px;
-  padding: 16px;
+  grid-template-columns: repeat(4, 1fr);
+  grid-gap: 12px;
+  padding: 16px 16px 8px;
 }
+
+.grid-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
 .quick-btn {
   background: #fff;
-  border-radius: 8px;
+  border-radius: 12px;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100% !important;
+  box-sizing: border-box;
+  min-height: 72px;
+  line-height: normal;
+  font-weight: normal;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+  transition: all 0.1s ease;
+}
+
+.quick-btn:active {
+  transform: scale(0.96);
+  background: #f9f9f9;
+}
+
+.quick-btn::after {
+  border: none;
+}
+
+.btn-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.btn-label {
+  font-size: 12px;
+  color: #333;
+}
+
+/* Color Classes */
+.bg-orange { background: #fff7e6; color: #d46b08; }
+.bg-blue { background: #e6f7ff; color: #096dd9; }
+.bg-yellow { background: #feffe6; color: #d4b106; }
+.bg-yellow-light { background: #fffbe6; color: #faad14; }
+.bg-brown { background: #fff1f0; color: #cf1322; } /* Using red tint for better look than brown */
+.bg-purple { background: #f9f0ff; color: #722ed1; }
+.bg-gray { background: #f5f5f5; color: #595959; }
+
+.add-btn {
+  background: #fff;
+  border: 1px dashed #d9d9d9;
+  color: #999;
+  box-shadow: none;
+}
+
+.add-btn .btn-icon {
+  color: #ccc;
+}
+
+/* Sort Controls */
+.sort-controls {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  left: -6px;
+  bottom: -6px;
+  background: rgba(255,255,255,0.9);
+  border-radius: 12px;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #eee;
+}
+
+.sort-btn {
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  text-align: center;
+  font-size: 14px;
+  background: #f0f0f0;
+  border-radius: 50%;
+  margin: 2px;
+}
+
+.delete-btn {
+  background: #ffccc7;
+}
+
+/* Section Divider */
+.section-divider {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px 0;
+}
+
+.section-title {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.edit-toggle {
+  font-size: 13px;
+  color: #576b95;
+  padding: 4px 8px;
 }
 .notes-row {
   padding: 0 16px 8px;

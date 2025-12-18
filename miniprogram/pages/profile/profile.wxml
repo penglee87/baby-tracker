@@ -1,8 +1,95 @@
 <view class="container">
-  <view class="section">
-    <text class="label">当前宝宝共享码</text>
-    <input class="input" value="{{inputBabyId}}" bindinput="onInput" placeholder="请输入共享码" />
-    <text class="hint">父母双方使用同一共享码即可同步数据</text>
+  <view class="header-section">
+    <text class="page-title">宝宝管理</text>
+    <text class="page-desc">管理宝宝档案，切换当前记录对象</text>
   </view>
-  <button class="save-btn" bindtap="save">保存设置</button>
+
+  <!-- Current Baby Card -->
+  <view class="section-label">当前宝宝</view>
+  <view class="card current-card">
+    <view class="card-body">
+      <view class="avatar-container">
+        <image wx:if="{{currentBaby.avatarUrl}}" class="avatar" src="{{currentBaby.avatarUrl}}" mode="aspectFill" />
+        <view wx:else class="avatar placeholder">👶</view>
+      </view>
+      <view class="info-container">
+        <view class="name-row">
+          <text class="baby-name">{{currentBaby.name || '未命名宝宝'}}</text>
+          <view class="status-tag">当前</view>
+        </view>
+        <text class="baby-id">共享码：{{currentBaby.id || '未知'}}</text>
+      </view>
+      <view class="action-container">
+        <view class="icon-btn" bindtap="openEdit" data-id="{{currentBaby.id}}">
+          <text class="btn-icon">✎</text>
+          <text class="btn-label">编辑</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Other Babies List -->
+  <block wx:if="{{otherBabies.length > 0}}">
+    <view class="section-label">其他宝宝</view>
+    <view class="baby-list">
+      <block wx:for="{{otherBabies}}" wx:key="id">
+        <view class="card list-item" wx:if="{{item.id}}">
+          <view class="card-body">
+            <view class="avatar-container small">
+              <image wx:if="{{item.avatarUrl}}" class="avatar" src="{{item.avatarUrl}}" mode="aspectFill" />
+              <view wx:else class="avatar placeholder">👶</view>
+            </view>
+            <view class="info-container">
+              <text class="baby-name small">{{item.name || '未命名宝宝'}}</text>
+              <text class="baby-id">共享码：{{item.id}}</text>
+            </view>
+            <view class="list-actions">
+              <button class="action-btn switch" size="mini" bindtap="setCurrent" data-id="{{item.id}}">切换</button>
+              <button class="action-btn edit" size="mini" bindtap="openEdit" data-id="{{item.id}}">编辑</button>
+              <button class="action-btn delete" size="mini" bindtap="deleteBaby" data-id="{{item.id}}">删除</button>
+            </view>
+          </view>
+        </view>
+      </block>
+    </view>
+  </block>
+
+  <view class="footer-spacer"></view>
+  
+  <view class="floating-footer">
+    <button class="main-btn" bindtap="openCreate">
+      <text class="plus-icon">+</text> 新增宝宝
+    </button>
+  </view>
+
+  <!-- Edit/Create Modal -->
+  <view class="overlay" wx:if="{{showEditModal}}">
+    <view class="modal">
+      <view class="modal-header">
+        <text class="modal-title">{{isCreate ? '新增宝宝' : '编辑宝宝'}}</text>
+      </view>
+      <view class="modal-content">
+        <view class="form-item" wx:if="{{isCreate}}">
+          <text class="label">共享码 <text class="desc">(唯一标识)</text></text>
+          <input class="input" placeholder="例如: family-001" bindinput="onEditIdInput" value="{{editId}}" />
+        </view>
+        <view class="form-item">
+          <text class="label">宝宝昵称</text>
+          <input class="input" placeholder="例如: 小宝" bindinput="onEditNameInput" value="{{editName}}" />
+        </view>
+        <view class="form-item">
+          <text class="label">头像</text>
+          <view class="avatar-selector" bindtap="chooseAvatar">
+            <image wx:if="{{editAvatarUrl}}" class="avatar-preview" src="{{editAvatarUrl}}" mode="aspectFill" />
+            <view wx:else class="avatar-preview placeholder">📷</view>
+            <text class="select-hint">点击更换头像</text>
+          </view>
+        </view>
+      </view>
+      <view class="modal-footer">
+        <button class="modal-btn cancel" bindtap="cancelEdit">取消</button>
+        <button class="modal-btn confirm" bindtap="saveEdit">保存</button>
+      </view>
+    </view>
+  </view>
 </view>

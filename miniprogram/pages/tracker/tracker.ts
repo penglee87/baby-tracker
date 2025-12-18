@@ -52,20 +52,62 @@ Component({
   },
   lifetimes: {
     attached() {
-      const babyId = getCurrentBabyId()
-      const todayKey = formatDateKey(Date.now())
-      const d = new Date()
-      const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
-      const inputTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
-      const quickActions = getQuickActions(babyId)
-      this.setData({ babyId, todayKey, inputTime, quickActions })
-      this.startWatch()
+      this.initData()
     },
     detached() {
       this.stopWatch()
     },
   },
+  pageLifetimes: {
+    show() {
+      const current = getCurrentBabyId()
+      if (current !== this.data.babyId) {
+        this.initData()
+      } else {
+        // Even if babyId hasn't changed, we might need to refresh if data changed elsewhere
+        // But watchEvents handles data changes. 
+        // Quick actions might have changed in profile/settings? No, quick actions are per baby.
+        // If we just switch tabs, watchEvents is still active?
+        // If the page was hidden, watchEvents callback might still fire if it's just a tab switch.
+        // However, it's safer to ensure we are watching the correct baby.
+        // Also, quick actions might be updated if we add a "Manage Quick Actions" in profile later.
+        // For now, checking babyId change is sufficient for the "follow switch" requirement.
+        // But let's reload quick actions just in case.
+        this.loadQuickActions()
+      }
+    }
+  },
   methods: {
+    initData() {
+      const babyId = getCurrentBabyId()
+      const todayKey = formatDateKey(Date.now())
+      const d = new Date()
+      const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
+      const inputTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+      this.setData({ babyId, todayKey, inputTime })
+      this.loadQuickActions()
+      this.startWatch()
+    },
+    getStyleForType(type: EventType) {
+      switch (type) {
+        case 'feed': return { icon: '🍼', colorClass: 'bg-orange' }
+        case 'drink': return { icon: '💧', colorClass: 'bg-blue' }
+        case 'pee': return { icon: '💧', colorClass: 'bg-yellow' }
+        case 'poop': return { icon: '💩', colorClass: 'bg-brown' }
+        case 'sleep': return { icon: '🌙', colorClass: 'bg-purple' }
+        case 'wake': return { icon: '☀️', colorClass: 'bg-yellow-light' }
+        default: return { icon: '📝', colorClass: 'bg-gray' }
+      }
+    },
+    async loadQuickActions() {
+      const babyId = this.data.babyId
+      const actions = getQuickActions(babyId)
+      const enrichedActions = actions.map(a => ({
+        ...a,
+        ...this.getStyleForType(a.type)
+      }))
+      this.setData({ quickActions: enrichedActions })
+    },
     openBabyModal() {
       this.setData({ showBabyModal: true, inputBabyId: this.data.babyId })
     },
@@ -263,35 +305,49 @@ Component({
     },
     moveActionUp(e: any) {
       const i = Number(e.currentTarget.dataset.index)
-      const list = [...(this.data.quickActions || [])]
-      if (i <= 0) return
-      ;[list[i - 1], list[i]] = [list[i], list[i - 1]]
-      this.setData({ quickActions: list })
-      setQuickActions(this.data.babyId, list)
+      const type = this.data.quickActions[i].type
+      this.updateActionOrder(type, 'up')
     },
     moveActionDown(e: any) {
       const i = Number(e.currentTarget.dataset.index)
-      const list = [...(this.data.quickActions || [])]
-      if (i >= list.length - 1) return
-      ;[list[i + 1], list[i]] = [list[i], list[i + 1]]
-      this.setData({ quickActions: list })
-      setQuickActions(this.data.babyId, list)
+      const type = this.data.quickActions[i].type
+      this.updateActionOrder(type, 'down')
     },
     moveActionTop(e: any) {
       const i = Number(e.currentTarget.dataset.index)
-      const list = [...(this.data.quickActions || [])]
-      if (i <= 0) return
-      const [it] = list.splice(i, 1)
-      list.unshift(it)
-      this.setData({ quickActions: list })
-      setQuickActions(this.data.babyId, list)
+      const type = this.data.quickActions[i].type
+      this.updateActionOrder(type, 'top')
     },
+    async updateActionOrder(type: EventType, direction: 'up' | 'down' | 'top') {
+      const babyId = this.data.babyId
+      let actions = getQuickActions(babyId)
+      const index = actions.findIndex(a => a.type === type)
+      if (index === -1) return
+
+      const action = actions[index]
+      actions.splice(index, 1)
+
+      if (direction === 'up') {
+        const newIndex = Math.max(0, index - 1)
+        actions.splice(newIndex, 0, action)
+      } else if (direction === 'down') {
+        const newIndex = Math.min(actions.length, index + 1)
+        actions.splice(newIndex, 0, action)
+      } else {
+        actions.unshift(action)
+      }
+
+      setQuickActions(babyId, actions)
+      this.loadQuickActions() // Reload to apply styles
+    },
+
     removeAction(e: any) {
-      const i = Number(e.currentTarget.dataset.index)
-      const list = [...(this.data.quickActions || [])]
-      list.splice(i, 1)
-      this.setData({ quickActions: list })
-      setQuickActions(this.data.babyId, list)
+      const index = e.currentTarget.dataset.index
+      const babyId = this.data.babyId
+      let actions = getQuickActions(babyId)
+      actions.splice(index, 1)
+      setQuickActions(babyId, actions)
+      this.loadQuickActions() // Reload to apply styles
     },
     commitEvent(type?: EventType) {
       const nowTs = this.buildTimestampFromHHMM(this.data.inputTime)

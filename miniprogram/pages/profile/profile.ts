@@ -1,37 +1,149 @@
-import { getCurrentBabyId, setCurrentBabyId } from '../../utils/storage'
+import {
+  getCurrentBabyId,
+  setCurrentBabyId,
+  listBabies,
+  upsertBaby,
+  deleteBabyById,
+  BabyProfile,
+} from '../../utils/storage'
 
 Component({
   data: {
-    babyId: '',
-    inputBabyId: '',
+    currentBabyId: '',
+    babies: [] as BabyProfile[],
+    currentBaby: {} as BabyProfile,
+    otherBabies: [] as BabyProfile[],
+    showEditModal: false,
+    isCreate: false,
+    editId: '',
+    editName: '',
+    editAvatarUrl: '',
   },
   lifetimes: {
     attached() {
-      const babyId = getCurrentBabyId()
-      this.setData({ babyId, inputBabyId: babyId })
+      const currentBabyId = getCurrentBabyId()
+      const babies = listBabies()
+      this.setData({ currentBabyId, babies })
+      this.refresh()
     }
   },
   methods: {
-    onInput(e: any) {
-      this.setData({ inputBabyId: e.detail.value })
+    refresh() {
+      const currentBabyId = getCurrentBabyId()
+      const babies = listBabies()
+      const current = babies.find(b => b.id === currentBabyId) || babies[0] || { id: 'default', name: '默认宝宝' }
+      const others = babies.filter(b => b.id !== current.id)
+      this.setData({ currentBabyId: current.id, babies, currentBaby: current, otherBabies: others })
     },
-    save() {
-      const id = (this.data.inputBabyId || '').trim() || 'default'
-      if (id !== this.data.babyId) {
-        setCurrentBabyId(id)
-        this.setData({ babyId: id })
+    openCreate() {
+      this.setData({
+        showEditModal: true,
+        isCreate: true,
+        editId: '',
+        editName: '',
+        editAvatarUrl: '',
+      })
+    },
+    openEdit(e: any) {
+      const id = e.currentTarget.dataset.id
+      const babies: BabyProfile[] = this.data.babies || []
+      const b = babies.find((x) => x.id === id)
+      if (!b) return
+      this.setData({
+        showEditModal: true,
+        isCreate: false,
+        editId: b.id,
+        editName: b.name,
+        editAvatarUrl: b.avatarUrl || '',
+      })
+    },
+    onEditIdInput(e: any) {
+      this.setData({ editId: (e.detail.value || '').trim() })
+    },
+    onEditNameInput(e: any) {
+      this.setData({ editName: (e.detail.value || '').trim() })
+    },
+    async chooseAvatar() {
+      try {
+        const res = await wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'] })
+        const temp = res.tempFilePaths?.[0]
+        if (!temp) return
+        // Persist the file
+        const saved = await new Promise<string>((resolve) => {
+          try {
+            wx.saveFile({
+              tempFilePath: temp,
+              success: (r) => resolve(r.savedFilePath),
+              fail: () => resolve(temp),
+            })
+          } catch (_e) {
+            resolve(temp)
+          }
+        })
+        this.setData({ editAvatarUrl: saved })
+      } catch (_e) {}
+    },
+    cancelEdit() {
+      this.setData({ showEditModal: false })
+    },
+    saveEdit() {
+      const isCreate = this.data.isCreate
+      const id = (this.data.editId || '').trim()
+      const name = (this.data.editName || '').trim() || '未命名宝宝'
+      const avatarUrl = this.data.editAvatarUrl || ''
+      const babies = listBabies()
+      if (isCreate) {
+        if (!id) {
+          wx.showToast({ title: '请输入共享码', icon: 'none' })
+          return
+        }
+        if (babies.some((b) => b.id === id)) {
+          wx.showToast({ title: '共享码已存在', icon: 'none' })
+          return
+        }
+        upsertBaby({ id, name, avatarUrl })
+        this.refresh()
+        this.setData({ showEditModal: false })
+        wx.showToast({ title: '已创建', icon: 'success' })
+      } else {
+        if (!id) return
+        upsertBaby({ id, name, avatarUrl })
+        this.refresh()
+        this.setData({ showEditModal: false })
         wx.showToast({ title: '已更新', icon: 'success' })
-        // 简单重启或通知其他页面刷新较复杂，这里依赖页面onShow或自动重刷
-        // 由于是tabbar页面，切换回来时会触发onShow(如果改为Page)，或组件的pageLifetimes.show
       }
-    }
+    },
+    setCurrent(e: any) {
+      const id = e.currentTarget.dataset.id
+      if (!id) return
+      setCurrentBabyId(id)
+      this.refresh()
+      wx.showToast({ title: '已切换', icon: 'success' })
+    },
+    deleteBaby(e: any) {
+      const id = e.currentTarget.dataset.id
+      if (!id) return
+      const babies = listBabies()
+      if (babies.length <= 1) {
+        wx.showToast({ title: '至少保留一个宝宝', icon: 'none' })
+        return
+      }
+      wx.showModal({
+        title: '删除确认',
+        content: '删除后数据不会自动迁移，请确认该宝宝记录不再需要',
+        success: (res) => {
+          if (res.confirm) {
+            deleteBabyById(id)
+            this.refresh()
+            wx.showToast({ title: '已删除', icon: 'success' })
+          }
+        },
+      })
+    },
   },
   pageLifetimes: {
     show() {
-      const babyId = getCurrentBabyId()
-      if (babyId !== this.data.babyId) {
-        this.setData({ babyId, inputBabyId: babyId })
-      }
+      this.refresh()
     }
   }
 })

@@ -58,6 +58,59 @@ export function setCurrentBabyId(id: string) {
   wx.setStorageSync(CURRENT_BABY_KEY, id)
 }
 
+export type BabyProfile = {
+  id: string
+  name: string
+  avatarUrl?: string
+}
+
+const BABIES_KEY = `${LOCAL_KEY_PREFIX}babies`
+
+export function listBabies(): BabyProfile[] {
+  const raw: BabyProfile[] = wx.getStorageSync(BABIES_KEY) || []
+  const seen = new Set<string>()
+  const list: BabyProfile[] = []
+  if (Array.isArray(raw)) {
+    raw.forEach((b) => {
+      const id = (b?.id || '').trim()
+      if (!id) return
+      if (seen.has(id)) return
+      seen.add(id)
+      list.push({ id, name: b.name || '未命名宝宝', avatarUrl: b.avatarUrl || '' })
+    })
+  }
+  if (list.length) return list
+  const defaults: BabyProfile[] = [{ id: 'default', name: '默认宝宝' }]
+  wx.setStorageSync(BABIES_KEY, defaults)
+  return defaults
+}
+
+export function saveBabies(babies: BabyProfile[]) {
+  wx.setStorageSync(BABIES_KEY, babies)
+}
+
+export function upsertBaby(baby: BabyProfile) {
+  const list = listBabies()
+  const idx = list.findIndex((b) => b.id === baby.id)
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], name: baby.name, avatarUrl: baby.avatarUrl }
+  } else {
+    list.push({ id: baby.id, name: baby.name, avatarUrl: baby.avatarUrl })
+  }
+  saveBabies(list)
+}
+
+export function deleteBabyById(id: string) {
+  const list = listBabies()
+  const filtered = list.filter((b) => b.id !== id)
+  saveBabies(filtered)
+  const current = getCurrentBabyId()
+  if (current === id) {
+    const next = filtered[0]?.id || 'default'
+    setCurrentBabyId(next)
+  }
+}
+
 function localEventsKey(babyId: string) {
   return `${LOCAL_KEY_PREFIX}events_${babyId}`
 }
