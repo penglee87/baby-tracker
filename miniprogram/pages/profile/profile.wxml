@@ -24,6 +24,10 @@
           <text class="btn-icon">✎</text>
           <text class="btn-label">编辑</text>
         </view>
+        <view class="icon-btn" bindtap="deleteBaby" data-id="{{currentBaby.id}}">
+          <text class="btn-icon danger">🗑</text>
+          <text class="btn-label danger">删除</text>
+        </view>
       </view>
     </view>
   </view>
@@ -45,8 +49,14 @@
             </view>
             <view class="list-actions">
               <button class="action-btn switch" size="mini" bindtap="setCurrent" data-id="{{item.id}}">切换</button>
-              <button class="action-btn edit" size="mini" bindtap="openEdit" data-id="{{item.id}}">编辑</button>
-              <button class="action-btn delete" size="mini" bindtap="deleteBaby" data-id="{{item.id}}">删除</button>
+              <view class="icon-actions">
+                <view class="icon-circle-btn" bindtap="openEdit" data-id="{{item.id}}">
+                  <text>✎</text>
+                </view>
+                <view class="icon-circle-btn danger" bindtap="deleteBaby" data-id="{{item.id}}">
+                  <text>🗑</text>
+                </view>
+              </view>
             </view>
           </view>
         </view>
