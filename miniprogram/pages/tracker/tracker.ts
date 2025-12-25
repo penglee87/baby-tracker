@@ -1,3 +1,7 @@
+// pages/tracker/tracker.ts
+// 首页/记录页逻辑
+// 负责展示快捷操作、最近记录列表以及处理新的记录添加
+
 import { formatTime } from '../../utils/util'
 import {
   addEvent,
@@ -21,22 +25,28 @@ interface EventRecordDisplay extends EventRecord {
 }
 
 Component({
+  /**
+   * 组件的初始数据
+   */
   data: {
     babyId: '',
     todayKey: '',
     events: [] as EventRecordDisplay[],
-    statsText: '',
-    inputTime: '',
+    statsText: '', // 顶部统计文本
+    inputTime: '', // 记录发生时间
     showTimeModal: false,
-    showBabyModal: false,
+    showBabyModal: false, // 切换宝宝弹窗
     inputBabyId: '',
-    // input states
+    
+    // 输入相关状态
     inputNotes: '',
     inputQuantity: 0,
     inputDuration: 0,
-    pendingType: '' as EventType | '',
-    showQuantityModal: false,
-    showDurationModal: false,
+    pendingType: '' as EventType | '', // 当前正在添加的事件类型
+    showQuantityModal: false, // 奶量输入弹窗
+    showDurationModal: false, // 时长输入弹窗
+    
+    // 编辑相关状态
     showEditModal: false,
     editId: '',
     editType: '' as EventType | '',
@@ -45,11 +55,16 @@ Component({
     editDuration: 0,
     editNotes: '',
     typeOptions: ['吃奶', '喝水', '小便', '大便', '睡觉', '醒来'],
-    // quick actions
+    
+    // 快捷操作按钮配置
     quickActions: [] as Array<{ type: EventType; label: string }>,
-    editActionsMode: false,
+    editActionsMode: false, // 是否处于编辑快捷按钮模式
     addActionIndex: 0,
   },
+
+  /**
+   * 组件生命周期
+   */
   lifetimes: {
     attached() {
       this.initData()
@@ -58,26 +73,28 @@ Component({
       this.stopWatch()
     },
   },
+
+  /**
+   * 页面生命周期
+   */
   pageLifetimes: {
     show() {
       const current = getCurrentBabyId()
+      // 如果当前宝宝ID变化，重新初始化数据
       if (current !== this.data.babyId) {
         this.initData()
       } else {
-        // Even if babyId hasn't changed, we might need to refresh if data changed elsewhere
-        // But watchEvents handles data changes. 
-        // Quick actions might have changed in profile/settings? No, quick actions are per baby.
-        // If we just switch tabs, watchEvents is still active?
-        // If the page was hidden, watchEvents callback might still fire if it's just a tab switch.
-        // However, it's safer to ensure we are watching the correct baby.
-        // Also, quick actions might be updated if we add a "Manage Quick Actions" in profile later.
-        // For now, checking babyId change is sufficient for the "follow switch" requirement.
-        // But let's reload quick actions just in case.
+        // 否则仅刷新快捷按钮配置（防止在其他页面修改后不同步）
         this.loadQuickActions()
       }
     }
   },
+
   methods: {
+    /**
+     * 初始化页面数据
+     * 加载当前宝宝ID，设置默认时间，启动数据监听
+     */
     initData() {
       const babyId = getCurrentBabyId()
       const todayKey = formatDateKey(Date.now())
@@ -88,6 +105,10 @@ Component({
       this.loadQuickActions()
       this.startWatch()
     },
+
+    /**
+     * 获取事件类型对应的图标和颜色样式
+     */
     getStyleForType(type: EventType) {
       switch (type) {
         case 'feed': return { icon: '🍼', colorClass: 'bg-orange' }
@@ -99,6 +120,10 @@ Component({
         default: return { icon: '📝', colorClass: 'bg-gray' }
       }
     },
+
+    /**
+     * 加载快捷操作按钮配置并附加样式
+     */
     async loadQuickActions() {
       const babyId = this.data.babyId
       const actions = getQuickActions(babyId)
@@ -108,6 +133,8 @@ Component({
       }))
       this.setData({ quickActions: enrichedActions })
     },
+
+    // --- 宝宝切换相关 ---
     openBabyModal() {
       this.setData({ showBabyModal: true, inputBabyId: this.data.babyId })
     },
@@ -122,32 +149,36 @@ Component({
       this.startWatch()
       wx.showToast({ title: '已切换', icon: 'success' })
     },
+
+    /**
+     * 启动数据监听
+     * 订阅 storage 模块的事件更新，实时刷新列表和统计
+     */
     startWatch() {
       const babyId = this.data.babyId
       this._unwatch && this._unwatch()
       this._unwatch = watchEvents(babyId, (events) => {
         const todayKey = this.data.todayKey || formatDateKey(Date.now())
-        // Ensure todayKey is set if not already
         if (!this.data.todayKey) {
           this.setData({ todayKey })
         }
 
+        // 计算今日统计
         const todays = events.filter((e) => formatDateKey(e.timestamp) === todayKey)
         const stats = aggregateDaily(todays, todayKey)
         const statsText = `吃奶:${stats.feedCount}次(${stats.feedMl}ml) 喝水:${stats.drinkCount}次(${stats.drinkMl}ml) 小便:${stats.peeCount}次 大便:${stats.poopCount}次 睡眠:${stats.sleepSessions}段(${stats.sleepMinutes}分钟)`
         
-        // Show last 20 events regardless of date
+        // 展示最近20条记录
         const recentEvents = events.slice(0, 20).map(e => {
           const d = new Date(e.timestamp)
           const pad = (n: number) => n < 10 ? `0${n}` : `${n}`
           const timeDisplay = `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
           const rawType: any = (e as any).type
-          let typeStr = 'unknown'; // 默认为未知
-  
+          let typeStr = 'unknown';
+
           if (typeof rawType === 'string') {
             typeStr = rawType;
           } else if (rawType && typeof rawType === 'object') {
-            // 如果数据库里意外存成了对象，尝试尝试挽救（比如取 rawType.type），否则标记为 error
             console.warn('数据异常: type 字段是对象', rawType);
             typeStr = rawType.type || 'error'; 
           }
@@ -171,6 +202,8 @@ Component({
         this.setData({ events: recentEvents, statsText })
       })
     },
+
+    // --- 列表项操作 (编辑/删除) ---
     openItemActions(e: any) {
       const id = e.currentTarget.dataset.id
       const item = (this.data.events || []).find((r) => r.id === id || r._id === id)
@@ -179,6 +212,7 @@ Component({
         itemList: ['编辑', '删除'],
         success: (res) => {
           if (res.tapIndex === 0) {
+            // 打开编辑弹窗
             const d = new Date(item.timestamp)
             const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
             const editTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -192,6 +226,7 @@ Component({
               editNotes: item.notes || '',
             })
           } else if (res.tapIndex === 1) {
+            // 确认删除
             wx.showModal({
               title: '确认删除',
               content: '删除后不可恢复，确定删除该记录？',
@@ -207,6 +242,8 @@ Component({
         },
       })
     },
+
+    // --- 编辑表单处理 ---
     onEditTypeChange(e: any) {
       const idx = Number(e.detail.value || 0)
       const map = ['feed', 'drink', 'pee', 'poop', 'sleep', 'wake']
@@ -262,12 +299,15 @@ Component({
         wx.showToast({ title: '已更新', icon: 'success' })
       })
     },
+
     stopWatch() {
       if (this._unwatch) {
         this._unwatch()
         this._unwatch = null
       }
     },
+
+    // --- 快捷操作处理 ---
     tapQuickAdd(e: any) {
       const type: EventType = e.currentTarget.dataset.type
       if (type === 'feed' || type === 'drink') {
@@ -349,6 +389,8 @@ Component({
       setQuickActions(babyId, actions)
       this.loadQuickActions() // Reload to apply styles
     },
+
+    // --- 提交新记录 ---
     commitEvent(type?: EventType) {
       const nowTs = this.buildTimestampFromHHMM(this.data.inputTime)
       const babyId = this.data.babyId
@@ -420,14 +462,4 @@ Component({
       return d.getTime()
     },
   },
-  pageLifetimes: {
-    show() {
-      const babyId = getCurrentBabyId()
-      if (babyId !== this.data.babyId) {
-        this.stopWatch()
-        this.setData({ babyId })
-        this.startWatch()
-      }
-    }
-  }
 })

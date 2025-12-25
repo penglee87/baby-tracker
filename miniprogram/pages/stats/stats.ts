@@ -1,3 +1,7 @@
+// pages/stats/stats.ts
+// 统计页逻辑
+// 负责展示今日数据概览和最近一周的趋势分析
+
 import {
   aggregateDaily,
   EventRecord,
@@ -8,12 +12,24 @@ import {
 } from '../../utils/storage'
 
 Component({
+  /**
+   * 组件的初始数据
+   */
   data: {
     babyId: '',
     todayKey: '',
     todayStats: {} as StatsSummary,
-    weekStats: [] as StatsSummary[],
+    weekStats: [] as StatsSummary[], // 最近一周的统计数据
+    
+    // 详情弹窗状态
+    showDetailModal: false,
+    detailDate: '',
+    detailEvents: [] as any[],
   },
+
+  /**
+   * 组件生命周期
+   */
   lifetimes: {
     attached() {
       const babyId = getCurrentBabyId()
@@ -22,16 +38,24 @@ Component({
       this.refresh()
     },
   },
+
   methods: {
+    /**
+     * 刷新统计数据
+     * 获取今日统计和过去7天的每日统计
+     */
     async refresh() {
       const babyId = getCurrentBabyId() // always get fresh babyId
       const now = Date.now()
+      
+      // 1. 获取今日数据
       const startOfToday = new Date(new Date(now).toDateString()).getTime()
       const endOfToday = startOfToday + 24 * 60 * 60 * 1000 - 1
       const todays = await listEvents(babyId, startOfToday, endOfToday)
       const todayKey = formatDateKey(now)
       const todayStats = aggregateDaily(todays, todayKey)
 
+      // 2. 获取过去7天数据（用于图表或列表展示）
       const days: StatsSummary[] = []
       for (let i = 6; i >= 0; i--) {
         const dayStart = startOfToday - i * 24 * 60 * 60 * 1000
@@ -42,6 +66,10 @@ Component({
       }
       this.setData({ babyId, todayStats, weekStats: days.reverse() })
     },
+
+    /**
+     * 查看某日的详细记录
+     */
     async viewDayDetail(e: any) {
       const dateKey = e.currentTarget.dataset.date
       const babyId = this.data.babyId
@@ -71,12 +99,18 @@ Component({
         detailEvents: formattedList
       })
     },
+
     closeDetailModal() {
       this.setData({ showDetailModal: false })
     }
   },
+
+  /**
+   * 页面生命周期
+   */
   pageLifetimes: {
     show() {
+      // 每次显示页面时自动刷新数据，确保数据同步
       this.refresh()
     }
   }
