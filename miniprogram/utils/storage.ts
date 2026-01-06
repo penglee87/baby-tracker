@@ -42,7 +42,11 @@ export interface StatsSummary {
 }
 
 // 云开发数据库实例缓存
-let db: WechatMiniprogram.Cloud.Database | null = null
+// 如果类型报错，可以使用 ReturnType<typeof wx.cloud.database> 或 any
+// 这里使用 typeof wx.cloud.database 的返回类型来确保兼容性
+type CloudDB = ReturnType<typeof wx.cloud.database>
+let dbInstance: CloudDB | null = null
+
 let cloudInitialized = false
 
 /**
@@ -50,19 +54,19 @@ let cloudInitialized = false
  * @returns 数据库实例，如果初始化失败则返回 null
  */
 export function initCloud() {
-  if (cloudInitialized) return db
+  if (cloudInitialized) return dbInstance
   if (wx.cloud) {
     try {
       wx.cloud.init({})
-      db = wx.cloud.database()
+      dbInstance = wx.cloud.database()
     } catch (e) {
-      db = null
+      dbInstance = null
     }
   } else {
-    db = null
+    dbInstance = null
   }
   cloudInitialized = true
-  return db
+  return dbInstance
 }
 
 const LOCAL_KEY_PREFIX = 'baby_tracker_'
@@ -209,7 +213,7 @@ export async function addEvent(rec: EventRecord): Promise<EventRecord> {
           updatedAt: Date.now(),
         },
       })
-      toSave._id = res._id
+      toSave._id = String(res._id)
       saved = true
     } catch (e) {
       // fallback to local

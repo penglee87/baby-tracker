@@ -24,7 +24,72 @@ interface EventRecordDisplay extends EventRecord {
   typeLabel?: string
 }
 
-Component({
+interface TrackerData {
+  babyId: string
+  todayKey: string
+  events: EventRecordDisplay[]
+  statsText: string
+  inputTime: string
+  showTimeModal: boolean
+  showBabyModal: boolean
+  inputBabyId: string
+  inputNotes: string
+  inputQuantity: number
+  inputDuration: number
+  pendingType: EventType | ''
+  showQuantityModal: boolean
+  showDurationModal: boolean
+  showEditModal: boolean
+  editId: string
+  editType: EventType | ''
+  editTime: string
+  editQuantity: number
+  editDuration: number
+  editNotes: string
+  typeOptions: string[]
+  quickActions: Array<{ type: EventType; label: string }>
+  editActionsMode: boolean
+  addActionIndex: number
+}
+
+interface TrackerMethod {
+  initData(): void
+  getStyleForType(type: EventType): { icon: string; colorClass: string }
+  loadQuickActions(): Promise<void>
+  openBabyModal(): void
+  babyIdInput(e: any): void
+  confirmBabyId(): void
+  startWatch(): void
+  openItemActions(e: any): void
+  onEditTypeChange(e: any): void
+  onEditNotesInput(e: any): void
+  onEditQuantityInput(e: any): void
+  onEditDurationInput(e: any): void
+  onEditTimeChange(e: any): void
+  cancelEdit(): void
+  saveEdit(): void
+  stopWatch(): void
+  tapQuickAdd(e: any): void
+  toggleEditActions(): void
+  openAddAction(): void
+  moveActionUp(e: any): void
+  moveActionDown(e: any): void
+  moveActionTop(e: any): void
+  updateActionOrder(type: EventType, direction: 'up' | 'down' | 'top'): Promise<void>
+  removeAction(e: any): void
+  commitEvent(type?: EventType): void
+  cancelModal(): void
+  notesInput(e: any): void
+  quantityInput(e: any): void
+  durationInput(e: any): void
+  onTimeChange(e: any): void
+  formatDisplay(ts: number): string
+  getNowTimeStr(): string
+  buildTimestampFromHHMM(time: string): number
+  [key: string]: any
+}
+
+Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
   /**
    * 组件的初始数据
    */
@@ -303,7 +368,7 @@ Component({
     stopWatch() {
       if (this._unwatch) {
         this._unwatch()
-        this._unwatch = null
+        this._unwatch = undefined
       }
     },
 
