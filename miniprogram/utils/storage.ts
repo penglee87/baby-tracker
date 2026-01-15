@@ -57,7 +57,10 @@ export function initCloud() {
   if (cloudInitialized) return dbInstance
   if (wx.cloud) {
     try {
-      wx.cloud.init({})
+      wx.cloud.init({  
+        env: 'cloud1-8gosc07ib9733a28', // 微信开发者工具云开发控制台中获取
+        traceUser: true, // 可选：将用户访问记录到用户管理
+      })
       dbInstance = wx.cloud.database()
     } catch (e) {
       dbInstance = null
@@ -434,7 +437,6 @@ export async function updateEvent(rec: EventRecord): Promise<EventRecord> {
   const database = initCloud()
   const id = rec._id || rec.id
   if (!id) return rec
-  let updated = false
   
   // 尝试更新云端数据
   if (database && rec._id) {
@@ -449,28 +451,29 @@ export async function updateEvent(rec: EventRecord): Promise<EventRecord> {
           updatedAt: Date.now(),
         },
       })
-      updated = true
     } catch (e) {}
   }
   
   // 更新本地存储
   // 即使云端更新成功，本地也需要同步更新，或者作为降级方案
-  if (!updated) {
-    const key = localEventsKey(rec.babyId)
-    const list: EventRecord[] = wx.getStorageSync(key) || []
-    const idx = list.findIndex((e) => e.id === rec.id || e._id === rec._id)
-    if (idx >= 0) {
-      const merged: EventRecord = {
-        ...list[idx],
-        type: rec.type,
-        timestamp: rec.timestamp,
-        quantity: rec.quantity,
-        durationMinutes: rec.durationMinutes,
-        notes: rec.notes,
-      }
-      list[idx] = merged
-      wx.setStorageSync(key, list)
+  const key = localEventsKey(rec.babyId)
+  const list: EventRecord[] = wx.getStorageSync(key) || []
+  const idx = list.findIndex((e) => {
+    if (rec.id && e.id === rec.id) return true
+    if (rec._id && e._id === rec._id) return true
+    return false
+  })
+  if (idx >= 0) {
+    const merged: EventRecord = {
+      ...list[idx],
+      type: rec.type,
+      timestamp: rec.timestamp,
+      quantity: rec.quantity,
+      durationMinutes: rec.durationMinutes,
+      notes: rec.notes,
     }
+    list[idx] = merged
+    wx.setStorageSync(key, list)
   }
   
   notifyListeners(rec.babyId)

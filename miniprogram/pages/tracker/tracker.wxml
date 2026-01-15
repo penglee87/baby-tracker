@@ -38,7 +38,14 @@
     </view>
   </view>
   <view class="notes-row">
-    <input class="notes-input" placeholder="备注（可选）" bindinput="notesInput" value="{{inputNotes}}" />
+    <block wx:if="{{!hasModalOpen}}">
+      <input class="notes-input" placeholder="备注（可选）" bindinput="notesInput" value="{{inputNotes}}" />
+    </block>
+    <block wx:else>
+      <view class="notes-input {{!inputNotes ? 'text-placeholder' : ''}}">
+        {{inputNotes || '备注（可选）'}}
+      </view>
+    </block>
   </view>
   <view class="list">
     <view class="list-title">最近记录</view>

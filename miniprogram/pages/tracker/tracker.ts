@@ -50,6 +50,8 @@ interface TrackerData {
   quickActions: Array<{ type: EventType; label: string }>
   editActionsMode: boolean
   addActionIndex: number
+  hasModalOpen: boolean
+  editOriginalTimestamp: number
 }
 
 interface TrackerMethod {
@@ -85,7 +87,7 @@ interface TrackerMethod {
   onTimeChange(e: any): void
   formatDisplay(ts: number): string
   getNowTimeStr(): string
-  buildTimestampFromHHMM(time: string): number
+  buildTimestampFromHHMM(time: string, baseDate?: number): number
   [key: string]: any
 }
 
@@ -125,6 +127,18 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
     quickActions: [] as Array<{ type: EventType; label: string }>,
     editActionsMode: false, // 是否处于编辑快捷按钮模式
     addActionIndex: 0,
+    hasModalOpen: false,
+    editOriginalTimestamp: 0,
+  },
+
+  observers: {
+    'showEditModal, showQuantityModal, showDurationModal, showTimeModal, showBabyModal': function (
+      v1, v2, v3, v4, v5
+    ) {
+      this.setData({
+        hasModalOpen: v1 || v2 || v3 || v4 || v5
+      })
+    }
   },
 
   /**
@@ -289,6 +303,7 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
               editQuantity: item.quantity || 0,
               editDuration: item.durationMinutes || 0,
               editNotes: item.notes || '',
+              editOriginalTimestamp: item.timestamp,
             })
           } else if (res.tapIndex === 1) {
             // 确认删除
@@ -327,7 +342,7 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
       this.setData({ editTime: e.detail.value })
     },
     cancelEdit() {
-      this.setData({ showEditModal: false, editId: '', editNotes: '', editQuantity: 0, editDuration: 0 })
+      this.setData({ showEditModal: false, editId: '', editNotes: '', editQuantity: 0, editDuration: 0, editOriginalTimestamp: 0 })
     },
     saveEdit() {
       const babyId = this.data.babyId
@@ -337,7 +352,7 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
         wx.showToast({ title: '编辑信息不完整', icon: 'none' })
         return
       }
-      const ts = this.buildTimestampFromHHMM(this.data.editTime)
+      const ts = this.buildTimestampFromHHMM(this.data.editTime, this.data.editOriginalTimestamp)
       const rec: EventRecord = {
         babyId,
         type,
@@ -518,8 +533,8 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
       const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
       return `${pad(d.getHours())}:${pad(d.getMinutes())}`
     },
-    buildTimestampFromHHMM(time: string) {
-      const now = new Date()
+    buildTimestampFromHHMM(time: string, baseDate?: number) {
+      const now = baseDate ? new Date(baseDate) : new Date()
       const parts = (time || '').split(':')
       const hh = Number(parts[0] || 0)
       const mm = Number(parts[1] || 0)
