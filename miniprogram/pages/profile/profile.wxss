@@ -296,3 +296,31 @@
 .modal-btn.confirm {
   color: var(--primary-color);
 }
+
+/* New Form Styles */
+.gender-group {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+}
+.radio-label {
+  margin-right: 20px;
+  font-size: 16px;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+}
+.radio-label radio {
+  transform: scale(0.8);
+  margin-right: 4px;
+}
+.picker-input {
+  background: var(--input-bg);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 16px;
+  color: var(--text-main);
+}
+.picker-input.placeholder {
+  color: var(--text-sub);
+}

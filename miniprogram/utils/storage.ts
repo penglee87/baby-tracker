@@ -107,6 +107,8 @@ export type BabyProfile = {
   id: string          // 唯一标识 (通常为共享码)
   name: string        // 昵称
   avatarUrl?: string  // 头像地址
+  gender?: 'boy' | 'girl' // 性别
+  birthday?: string   // 出生日期 YYYY-MM-DD
 }
 
 const BABIES_KEY = `${LOCAL_KEY_PREFIX}babies`
@@ -125,7 +127,13 @@ export function listBabies(): BabyProfile[] {
       if (!id) return
       if (seen.has(id)) return
       seen.add(id)
-      list.push({ id, name: b.name || '未命名宝宝', avatarUrl: b.avatarUrl || '' })
+      list.push({ 
+        id, 
+        name: b.name || '未命名宝宝', 
+        avatarUrl: b.avatarUrl || '',
+        gender: b.gender,
+        birthday: b.birthday
+      })
     })
   }
   if (list.length) return list
@@ -150,12 +158,166 @@ export function upsertBaby(baby: BabyProfile) {
   const list = listBabies()
   const idx = list.findIndex((b) => b.id === baby.id)
   if (idx >= 0) {
-    list[idx] = { ...list[idx], name: baby.name, avatarUrl: baby.avatarUrl }
+    list[idx] = { 
+      ...list[idx], 
+      name: baby.name, 
+      avatarUrl: baby.avatarUrl,
+      gender: baby.gender,
+      birthday: baby.birthday
+    }
   } else {
-    list.push({ id: baby.id, name: baby.name, avatarUrl: baby.avatarUrl })
+    list.push(baby)
   }
   saveBabies(list)
 }
+
+/**
+ * 成长记录接口 (身高体重)
+ */
+export interface GrowthRecord {
+  id?: string
+  babyId: string
+  date: string // YYYY-MM-DD
+  height?: number // cm
+  weight?: number // kg
+  headCircumference?: number // cm
+  notes?: string
+}
+
+/**
+ * 里程碑记录接口 (相册)
+ */
+export interface MilestoneRecord {
+  id?: string
+  babyId: string
+  date: string // YYYY-MM-DD
+  title: string
+  description?: string
+  photoFileId?: string // Cloud File ID
+  photoLocalPath?: string // Local temp path
+}
+
+
+/**
+ * 生成本地存储成长记录的Key
+ */
+function localGrowthKey(babyId: string) {
+  return `${LOCAL_KEY_PREFIX}growth_${babyId}`
+}
+
+/**
+ * 生成本地存储里程碑记录的Key
+ */
+function localMilestonesKey(babyId: string) {
+  return `${LOCAL_KEY_PREFIX}milestones_${babyId}`
+}
+
+/**
+ * 获取成长记录列表 (身高体重)
+ */
+export async function listGrowthRecords(babyId: string): Promise<GrowthRecord[]> {
+  const database = initCloud()
+  if (database) {
+    try {
+      const res = await database.collection('growth')
+        .where({ babyId })
+        .orderBy('date', 'desc')
+        .get()
+      return res.data as GrowthRecord[]
+    } catch (e) {
+      // fallback
+    }
+  }
+  const key = localGrowthKey(babyId)
+  return wx.getStorageSync(key) || []
+}
+
+/**
+ * 添加成长记录
+ */
+export async function addGrowthRecord(rec: GrowthRecord): Promise<GrowthRecord> {
+  const database = initCloud()
+  const toSave = { ...rec }
+  let saved = false
+
+  if (database) {
+    try {
+      const res = await database.collection('growth').add({
+        data: {
+          ...toSave,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+      })
+      toSave.id = String(res._id)
+      saved = true
+    } catch (e) {}
+  }
+
+  if (!saved) {
+    const key = localGrowthKey(rec.babyId)
+    const list: GrowthRecord[] = wx.getStorageSync(key) || []
+    toSave.id = `${Date.now()}_${Math.random().toString(36).slice(2)}`
+    list.unshift(toSave)
+    list.sort((a, b) => b.date.localeCompare(a.date)) // Keep sorted
+    wx.setStorageSync(key, list)
+  }
+  return toSave
+}
+
+/**
+ * 获取里程碑列表
+ */
+export async function listMilestones(babyId: string): Promise<MilestoneRecord[]> {
+  const database = initCloud()
+  if (database) {
+    try {
+      const res = await database.collection('milestones')
+        .where({ babyId })
+        .orderBy('date', 'desc')
+        .get()
+      return res.data as MilestoneRecord[]
+    } catch (e) {
+      // fallback
+    }
+  }
+  const key = localMilestonesKey(babyId)
+  return wx.getStorageSync(key) || []
+}
+
+/**
+ * 添加里程碑
+ */
+export async function addMilestone(rec: MilestoneRecord): Promise<MilestoneRecord> {
+  const database = initCloud()
+  const toSave = { ...rec }
+  let saved = false
+
+  if (database) {
+    try {
+      const res = await database.collection('milestones').add({
+        data: {
+          ...toSave,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+      })
+      toSave.id = String(res._id)
+      saved = true
+    } catch (e) {}
+  }
+
+  if (!saved) {
+    const key = localMilestonesKey(rec.babyId)
+    const list: MilestoneRecord[] = wx.getStorageSync(key) || []
+    toSave.id = `${Date.now()}_${Math.random().toString(36).slice(2)}`
+    list.unshift(toSave)
+    list.sort((a, b) => b.date.localeCompare(a.date))
+    wx.setStorageSync(key, list)
+  }
+  return toSave
+}
+
 
 /**
  * 删除指定ID的宝宝

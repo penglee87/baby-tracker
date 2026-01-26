@@ -2,6 +2,7 @@
   "pages": [
     "pages/tracker/tracker",
     "pages/stats/stats",
+    "pages/growth/growth",
     "pages/profile/profile"
   ],
   "window": {
@@ -25,6 +26,12 @@
         "text": "统计",
         "iconPath": "images/stats.png",
         "selectedIconPath": "images/stats-active.png"
+      },
+      {
+        "pagePath": "pages/growth/growth",
+        "text": "成长",
+        "iconPath": "images/growth.png",
+        "selectedIconPath": "images/growth-active.png"
       },
       {
         "pagePath": "pages/profile/profile",

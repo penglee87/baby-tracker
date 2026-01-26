@@ -88,6 +88,25 @@
           <input class="input" placeholder="例如: 小宝" bindinput="onEditNameInput" value="{{editName}}" />
         </view>
         <view class="form-item">
+          <text class="label">性别</text>
+          <radio-group class="gender-group" bindchange="onEditGenderChange">
+            <label class="radio-label">
+              <radio value="boy" checked="{{editGender === 'boy'}}" color="#9F85FF"/> 男宝
+            </label>
+            <label class="radio-label">
+              <radio value="girl" checked="{{editGender === 'girl'}}" color="#FF85C0"/> 女宝
+            </label>
+          </radio-group>
+        </view>
+        <view class="form-item">
+          <text class="label">出生日期</text>
+          <picker mode="date" value="{{editBirthday}}" bindchange="onEditBirthdayChange">
+             <view class="picker-input {{editBirthday ? '' : 'placeholder'}}">
+               {{editBirthday || '请选择出生日期'}}
+             </view>
+          </picker>
+        </view>
+        <view class="form-item">
           <text class="label">头像</text>
           <view class="avatar-selector" bindtap="chooseAvatar">
             <image wx:if="{{editAvatarUrl}}" class="avatar-preview" src="{{editAvatarUrl}}" mode="aspectFill" />

@@ -27,6 +27,8 @@ Component({
     editId: '',
     editName: '',
     editAvatarUrl: '',
+    editGender: 'boy',
+    editBirthday: '',
   },
 
   /**
@@ -62,6 +64,8 @@ Component({
         editId: '',
         editName: '',
         editAvatarUrl: '',
+        editGender: 'boy',
+        editBirthday: '',
       })
     },
     openEdit(e: any) {
@@ -75,6 +79,8 @@ Component({
         editId: b.id,
         editName: b.name,
         editAvatarUrl: b.avatarUrl || '',
+        editGender: b.gender || 'boy',
+        editBirthday: b.birthday || '',
       })
     },
 
@@ -84,6 +90,12 @@ Component({
     },
     onEditNameInput(e: any) {
       this.setData({ editName: (e.detail.value || '').trim() })
+    },
+    onEditGenderChange(e: any) {
+      this.setData({ editGender: e.detail.value })
+    },
+    onEditBirthdayChange(e: any) {
+      this.setData({ editBirthday: e.detail.value })
     },
 
     /**
@@ -124,6 +136,9 @@ Component({
       const id = (this.data.editId || '').trim()
       const name = (this.data.editName || '').trim() || '未命名宝宝'
       const avatarUrl = this.data.editAvatarUrl || ''
+      const gender = this.data.editGender as 'boy' | 'girl'
+      const birthday = this.data.editBirthday || ''
+
       const babies = listBabies()
       if (isCreate) {
         if (!id) {
@@ -134,13 +149,13 @@ Component({
           wx.showToast({ title: '共享码已存在', icon: 'none' })
           return
         }
-        upsertBaby({ id, name, avatarUrl })
+        upsertBaby({ id, name, avatarUrl, gender, birthday })
         this.refresh()
         this.setData({ showEditModal: false })
         wx.showToast({ title: '已创建', icon: 'success' })
       } else {
         if (!id) return
-        upsertBaby({ id, name, avatarUrl })
+        upsertBaby({ id, name, avatarUrl, gender, birthday })
         this.refresh()
         this.setData({ showEditModal: false })
         wx.showToast({ title: '已更新', icon: 'success' })

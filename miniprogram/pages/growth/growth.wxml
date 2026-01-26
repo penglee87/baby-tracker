@@ -1,0 +1,114 @@
+<view class="container">
+  <view class="header">
+    <view class="baby-info">
+      <image class="avatar" src="{{currentBaby.avatarUrl || ''}}" mode="aspectFill" wx:if="{{currentBaby.avatarUrl}}"></image>
+      <view class="avatar placeholder" wx:else>👶</view>
+      <view class="text-info">
+        <text class="name">{{currentBaby.name}}</text>
+        <text class="age">{{ageStr}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 身体数据卡片 -->
+  <view class="section-title">身体数据</view>
+  <view class="card growth-card">
+    <view class="stat-row">
+      <view class="stat-item">
+        <text class="label">身高 (cm)</text>
+        <text class="value">{{height || '--'}}</text>
+        <text class="standard">标准: {{growthStandard.height}}</text>
+      </view>
+      <view class="divider"></view>
+      <view class="stat-item">
+        <text class="label">体重 (kg)</text>
+        <text class="value">{{weight || '--'}}</text>
+        <text class="standard">标准: {{growthStandard.weight}}</text>
+      </view>
+    </view>
+    <view class="card-action" bindtap="addGrowthRecord">
+      <text>+ 记录数据</text>
+    </view>
+  </view>
+
+  <!-- 里程碑时间轴 -->
+  <view class="section-title">成长里程碑</view>
+  <view class="timeline">
+    <view class="timeline-line"></view>
+    
+    <view class="timeline-item add-btn" bindtap="addMilestone">
+      <view class="dot plus">+</view>
+      <view class="content simple">
+        <text>记录新里程碑</text>
+      </view>
+    </view>
+    <block wx:for="{{milestones}}" wx:key="id">
+      <view class="timeline-item">
+        <view class="dot"></view>
+        <view class="content">
+          <view class="date-tag">{{item.date}}</view>
+          <text class="title">{{item.title}}</text>
+          <text class="desc" wx:if="{{item.description}}">{{item.description}}</text>
+          <image wx:if="{{item.photoLocalPath || item.photoFileId}}" src="{{item.photoLocalPath || item.photoFileId}}" mode="widthFix" class="photo"></image>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <!-- Growth Record Modal -->
+  <view class="modal-mask" wx:if="{{showGrowthModal}}">
+    <view class="modal-content">
+      <view class="modal-header">记录身体数据</view>
+      <view class="form-item">
+        <text class="label">日期</text>
+        <picker mode="date" value="{{inputDate}}" bindchange="onDateChange">
+          <view class="picker-input">{{inputDate}}</view>
+        </picker>
+      </view>
+      <view class="form-item">
+        <text class="label">身高 (cm)</text>
+        <input class="input" type="digit" placeholder="请输入身高" value="{{inputHeight}}" bindinput="onHeightInput" />
+      </view>
+      <view class="form-item">
+        <text class="label">体重 (kg)</text>
+        <input class="input" type="digit" placeholder="请输入体重" value="{{inputWeight}}" bindinput="onWeightInput" />
+      </view>
+      <view class="modal-actions">
+        <button class="btn cancel" bindtap="cancelGrowth">取消</button>
+        <button class="btn confirm" bindtap="saveGrowth">保存</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- Milestone Modal -->
+  <view class="modal-mask" wx:if="{{showMilestoneModal}}">
+    <view class="modal-content">
+      <view class="modal-header">发布里程碑</view>
+      <view class="form-item">
+        <text class="label">日期</text>
+        <picker mode="date" value="{{inputMilestoneDate}}" bindchange="onMilestoneDateChange">
+          <view class="picker-input">{{inputMilestoneDate}}</view>
+        </picker>
+      </view>
+      <view class="form-item">
+        <text class="label">标题</text>
+        <input class="input" placeholder="例如：第一次翻身" value="{{inputTitle}}" bindinput="onTitleInput" />
+      </view>
+      <view class="form-item">
+        <text class="label">描述</text>
+        <textarea class="textarea" placeholder="记录这难忘的一刻..." value="{{inputDesc}}" bindinput="onDescInput"></textarea>
+      </view>
+      <view class="form-item photo-upload" bindtap="choosePhoto">
+        <image wx:if="{{inputPhotoPath}}" src="{{inputPhotoPath}}" mode="aspectFill" class="preview"></image>
+        <view wx:else class="upload-placeholder">
+          <text class="icon">+</text>
+          <text>添加照片</text>
+        </view>
+      </view>
+      <view class="modal-actions">
+        <button class="btn cancel" bindtap="cancelMilestone">取消</button>
+        <button class="btn confirm" bindtap="saveMilestone">发布</button>
+      </view>
+    </view>
+  </view>
+</view>
