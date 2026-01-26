@@ -382,7 +382,9 @@ export function aggregateDaily(events: EventRecord[], dateKey: string): StatsSum
         break
       case 'sleep':
         sum.sleepSessions += 1
-        sum.sleepMinutes += e.durationMinutes || 0
+        // 兼容可能存在的 duration 字段，并强制转换为数字
+        const minutes = Number(e.durationMinutes || (e as any).duration || 0)
+        sum.sleepMinutes += isNaN(minutes) ? 0 : minutes
         break
       case 'wake':
         break

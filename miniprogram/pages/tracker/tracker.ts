@@ -353,17 +353,30 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
         return
       }
       const ts = this.buildTimestampFromHHMM(this.data.editTime, this.data.editOriginalTimestamp)
+      
+      // 查找原始记录以确定使用哪个ID字段
+      const original = (this.data.events || []).find(e => e.id === id || e._id === id)
+      
       const rec: EventRecord = {
         babyId,
         type,
         timestamp: ts,
         notes: this.data.editNotes || '',
       }
-      if (id.startsWith('6') || id.length >= 20) {
-        rec._id = id
+      
+      // 准确设置 ID
+      if (original) {
+        if (original._id === id) rec._id = id
+        if (original.id === id) rec.id = id
       } else {
-        rec.id = id
+        // 兜底逻辑
+        if (id.startsWith('6') || id.length >= 20) {
+          rec._id = id
+        } else {
+          rec.id = id
+        }
       }
+
       if (type === 'feed' || type === 'drink') {
         rec.quantity = Number(this.data.editQuantity) || 0
       } else {
