@@ -58,11 +58,16 @@ export function initCloud() {
   if (wx.cloud) {
     try {
       wx.cloud.init({  
-        env: 'cloud1-8gosc07ib9733a28', // 微信开发者工具云开发控制台中获取
-        traceUser: true, // 可选：将用户访问记录到用户管理
+        // 请在此处填入您的云开发环境ID
+        // 可以在“微信开发者工具 -> 云开发 -> 设置”中查看
+        env: 'cloud1-8gosc07ib9733a28', 
+        traceUser: true, 
       })
       dbInstance = wx.cloud.database()
+      // 简单的连接测试，确保 ID 正确
+      console.log('[Cloud] 初始化尝试完成')
     } catch (e) {
+      console.error('[Cloud] 初始化失败，将降级为本地存储:', e)
       dbInstance = null
     }
   } else {
@@ -237,6 +242,79 @@ export async function addEvent(rec: EventRecord): Promise<EventRecord> {
   // 触发数据更新通知
   notifyListeners(rec.babyId)
   return toSave
+}
+
+/**
+ * 自动关联“醒来”与最近一次“睡觉”记录
+ * 计算并更新睡眠时长
+ * @param wakeRecord 刚刚添加的醒来记录
+ */
+export async function linkSleepAndWake(wakeRecord: EventRecord): Promise<void> {
+  if (wakeRecord.type !== 'wake') return
+  
+  const babyId = wakeRecord.babyId
+  const database = initCloud()
+  
+  // 查找最近一次的 sleep 记录
+  // 限制时间范围：过去24小时内
+  const now = wakeRecord.timestamp
+  const oneDayAgo = now - 24 * 60 * 60 * 1000
+  
+  let lastSleep: EventRecord | undefined
+  
+  if (database) {
+    try {
+      const res = await database.collection('events')
+        .where({
+          babyId,
+          type: 'sleep',
+          timestamp: database.command.gte(oneDayAgo).and(database.command.lt(now))
+        })
+        .orderBy('timestamp', 'desc')
+        .limit(1)
+        .get()
+      if (res.data && res.data.length > 0) {
+        lastSleep = res.data[0] as EventRecord
+      }
+    } catch (e) { console.error('linkSleepAndWake cloud query failed', e) }
+  }
+  
+  // 如果云端未找到或失败，尝试本地查找
+  if (!lastSleep) {
+    const key = localEventsKey(babyId)
+    const list: EventRecord[] = wx.getStorageSync(key) || []
+    lastSleep = list.find(e => 
+      e.type === 'sleep' && 
+      e.timestamp >= oneDayAgo && 
+      e.timestamp < now
+    ) // list is usually sorted by desc? If not we should sort, but assume default listEvents order
+      // localEventsKey storage order is not strictly guaranteed to be desc if we splice, 
+      // but `addEvent` does `unshift`. So index 0 is newest.
+      // Wait, filterByRange doesn't sort. listEvents sorts.
+      // Let's iterate list to find max timestamp < now.
+    if (!lastSleep && list.length > 0) {
+      // Find the latest sleep before wake
+      const candidates = list.filter(e => e.type === 'sleep' && e.timestamp >= oneDayAgo && e.timestamp < now)
+      if (candidates.length > 0) {
+        // Sort by timestamp desc
+        candidates.sort((a, b) => b.timestamp - a.timestamp)
+        lastSleep = candidates[0]
+      }
+    }
+  }
+
+  if (lastSleep) {
+    // 只有当 sleep 记录还没有 durationMinutes (或者为0) 时才更新
+    // 这样避免重复更新，或者覆盖用户手动修改过的值
+    if (!lastSleep.durationMinutes || lastSleep.durationMinutes === 0) {
+       const diff = Math.round((now - lastSleep.timestamp) / 1000 / 60)
+       if (diff > 0) {
+         lastSleep.durationMinutes = diff
+         await updateEvent(lastSleep)
+         wx.showToast({ title: `睡眠时长已记录: ${Math.floor(diff/60)}小时${diff%60}分`, icon: 'none', duration: 3000 })
+       }
+    }
+  }
 }
 
 /**

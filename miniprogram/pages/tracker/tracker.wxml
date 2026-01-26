@@ -4,6 +4,48 @@
     <text class="subtitle">当前宝宝：{{babyId}}</text>
     <text class="stats">{{statsText}}</text>
   </view>
+
+  <!-- Status Card -->
+  <view class="status-card-section" wx:if="{{currentStatus && currentStatus.isSleeping}}">
+    <view class="status-card {{currentStatus.isLongSleep ? 'status-warning' : 'status-sleep'}}">
+      <view class="status-icon">😴</view>
+      <view class="status-info">
+        <text class="status-title">睡觉中</text>
+        <text class="status-desc">开始于 {{currentStatus.startTimeStr}}</text>
+        <text class="status-duration" wx:if="{{currentStatus.durationStr}}">已睡约 {{currentStatus.durationStr}}</text>
+        <text class="status-tip" wx:if="{{currentStatus.isLongSleep}}">宝宝睡得有点久了，要不要确认一下？</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Timer Section -->
+  <!-- 
+  <view class="timer-section">
+    <block wx:if="{{timerState === 'idle'}}">
+      <view class="timer-idle">
+        <button class="timer-start-btn" data-type="sleep" bindtap="startTimer">
+          <text>🌙 计时睡觉</text>
+        </button>
+        <button class="timer-start-btn" data-type="feed" bindtap="startTimer">
+          <text>🍼 计时亲喂</text>
+        </button>
+      </view>
+    </block>
+    <block wx:else>
+      <view class="timer-running">
+        <view class="timer-info">
+          <text class="timer-label">{{timerType === 'sleep' ? '正在睡觉' : '正在亲喂'}}</text>
+          <text class="timer-value">{{timerValue}}</text>
+        </view>
+        <view class="timer-controls">
+          <button class="timer-ctrl-btn cancel" bindtap="cancelTimer">取消</button>
+          <button class="timer-ctrl-btn finish" bindtap="endTimer">结束</button>
+        </view>
+      </view>
+    </block>
+  </view>
+  -->
+
   <view class="quick-grid">
     <block wx:for="{{quickActions}}" wx:key="type">
       <view class="grid-item">
@@ -128,7 +170,7 @@
         <view class="modal-input">时间：{{editTime}}</view>
       </picker>
       <input type="number" class="modal-input" placeholder="数量（ml）" bindinput="onEditQuantityInput" value="{{editQuantity}}" wx:if="{{editType==='feed'||editType==='drink'}}" />
-      <input type="number" class="modal-input" placeholder="时长（分钟）" bindinput="onEditDurationInput" value="{{editDuration}}" wx:if="{{editType==='sleep'}}" />
+      <input type="number" class="modal-input" placeholder="时长（分钟）" bindinput="onEditDurationInput" value="{{editDuration}}" wx:if="{{editType==='sleep'||editType==='feed'}}" />
       <input class="modal-input" placeholder="备注（可选）" bindinput="onEditNotesInput" value="{{editNotes}}" />
       <view class="modal-actions">
         <button class="cancel" bindtap="cancelEdit">取消</button>

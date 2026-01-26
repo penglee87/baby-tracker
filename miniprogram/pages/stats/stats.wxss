@@ -1,6 +1,7 @@
 page, .stats-page {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--bg-color);
+  transition: background 0.3s;
 }
 .header {
   padding: 16px;
@@ -8,28 +9,33 @@ page, .stats-page {
 .title {
   font-size: 18px;
   font-weight: 600;
+  color: var(--text-main);
 }
 .subtitle {
   display: block;
   margin-top: 4px;
-  color: #666;
+  color: var(--text-sub);
 }
 .section-title {
   font-size: 16px;
   font-weight: 600;
   padding: 0 16px;
   margin-top: 12px;
+  color: var(--text-main);
 }
 .card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
   padding: 12px 16px;
   margin: 8px 16px;
   display: flex;
   flex-direction: column;
 }
+.card text {
+  color: var(--text-main);
+}
 .date {
-  color: #666;
+  color: var(--text-sub) !important;
   margin-bottom: 4px;
 }
 .actions {
@@ -45,7 +51,7 @@ page, .stats-page {
   top: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.35);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -53,7 +59,7 @@ page, .stats-page {
 }
 .modal {
   width: 80%;
-  background: #fff;
+  background: var(--modal-bg);
   border-radius: 10px;
   padding: 16px;
 }
@@ -61,6 +67,7 @@ page, .stats-page {
   font-weight: 600;
   display: block;
   margin-bottom: 12px;
+  color: var(--text-main);
 }
 .modal-actions {
   display: flex;
@@ -68,7 +75,7 @@ page, .stats-page {
   margin-top: 12px;
 }
 .confirm {
-  background: #07c160;
+  background: var(--primary-color);
   color: #fff;
   font-size: 14px;
   padding: 4px 16px;
@@ -76,12 +83,12 @@ page, .stats-page {
 
 /* Detail List Styles */
 .detail-list {
-  background: #f9f9f9;
+  background: var(--input-bg);
   border-radius: 6px;
 }
 .item {
-  background: #fff;
-  border-bottom: 1px solid #eee;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--divider-color);
   padding: 10px 12px;
   display: flex;
   align-items: center;
@@ -91,25 +98,112 @@ page, .stats-page {
   border-bottom: none;
 }
 .time {
-  color: #888;
+  color: var(--text-sub);
   width: 44%;
 }
 .type {
   width: 24%;
   font-weight: 500;
+  color: var(--text-main);
 }
 .meta {
-  margin-left: 8px;
-  color: #333;
+  color: var(--text-main);
 }
 .notes {
-  width: 100%;
-  margin-top: 4px;
-  color: #666;
-  font-size: 12px;
+  color: var(--text-sub);
 }
 .empty-tip {
   text-align: center;
   padding: 20px;
-  color: #999;
+  color: var(--text-sub);
 }
+
+/* Visuals */
+.charts-section {
+  margin-bottom: 16px;
+}
+.sleep-timeline {
+  padding: 8px 0;
+}
+.timeline-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-sub);
+  margin-bottom: 4px;
+}
+.timeline-bar {
+  height: 24px;
+  background: var(--input-bg);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.sleep-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--text-purple); 
+  opacity: 0.8;
+  border-radius: 2px;
+}
+
+.trend-chart {
+  display: flex;
+  justify-content: space-between;
+  height: 150px;
+  align-items: flex-end;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--divider-color);
+}
+.trend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+  width: 100%;
+  justify-content: center;
+  padding-bottom: 4px;
+}
+.bar {
+  width: 8px;
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: height 0.3s;
+}
+.bar.feed { background: var(--text-orange); }
+.bar.sleep { background: var(--text-purple); }
+
+.trend-date {
+  font-size: 10px;
+  color: var(--text-sub);
+  margin-top: 4px;
+}
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+  gap: 16px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+.dot.feed { background: var(--text-orange); }
+.dot.sleep { background: var(--text-purple); }

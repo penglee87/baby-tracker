@@ -13,6 +13,42 @@
       <text>睡眠：{{todayStats.sleepSessions}} 段（{{todayStats.sleepMinutes}} 分钟）</text>
     </view>
   </view>
+  
+  <view class="charts-section">
+    <text class="section-title">今日作息（睡眠分布）</text>
+    <view class="card">
+      <view class="sleep-timeline">
+        <view class="timeline-scale">
+          <text>0</text><text>6</text><text>12</text><text>18</text><text>24</text>
+        </view>
+        <view class="timeline-bar">
+          <block wx:for="{{visuals.todaySleep}}" wx:key="left">
+            <view class="sleep-block" style="left: {{item.left}}%; width: {{item.width}}%;"></view>
+          </block>
+        </view>
+      </view>
+    </view>
+
+    <text class="section-title">最近一周趋势</text>
+    <view class="card">
+      <view class="trend-chart">
+        <block wx:for="{{visuals.trend}}" wx:key="date">
+          <view class="trend-item">
+            <view class="bars">
+              <view class="bar feed" style="height: {{item.feedHeight}}%"></view>
+              <view class="bar sleep" style="height: {{item.sleepHeight}}%"></view>
+            </view>
+            <text class="trend-date">{{item.date}}</text>
+          </view>
+        </block>
+      </view>
+      <view class="chart-legend">
+        <view class="legend-item"><view class="dot feed"></view><text>奶量</text></view>
+        <view class="legend-item"><view class="dot sleep"></view><text>睡眠</text></view>
+      </view>
+    </view>
+  </view>
+
   <view class="week">
     <text class="section-title">最近 7 天（点击查看详情）</text>
     <block wx:for="{{weekStats}}" wx:key="dateKey">

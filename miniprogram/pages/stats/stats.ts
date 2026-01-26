@@ -4,7 +4,6 @@
 
 import {
   aggregateDaily,
-  EventRecord,
   formatDateKey,
   getCurrentBabyId,
   listEvents,
@@ -21,6 +20,12 @@ Component({
     todayStats: {} as StatsSummary,
     weekStats: [] as StatsSummary[], // 最近一周的统计数据
     
+    // 图表数据
+    visuals: {
+      trend: [] as any[],
+      todaySleep: [] as any[]
+    },
+
     // 详情弹窗状态
     showDetailModal: false,
     detailDate: '',
@@ -64,7 +69,40 @@ Component({
         const key = formatDateKey(dayStart)
         days.push(aggregateDaily(list, key))
       }
-      this.setData({ babyId, todayStats, weekStats: days.reverse() })
+
+      // Calculate Today Sleep Segments
+      const todaySleep = todays.filter(e => e.type === 'sleep' && e.durationMinutes && e.durationMinutes > 0).map(e => {
+         const dt = new Date(e.timestamp)
+         const startMin = dt.getHours() * 60 + dt.getMinutes()
+         const left = (startMin / 1440) * 100
+         const width = (e.durationMinutes! / 1440) * 100
+         const realWidth = (left + width > 100) ? (100 - left) : width
+         return { left, width: realWidth }
+      })
+
+      // Calculate Trend (before reverse)
+      const maxFeed = Math.max(...days.map(d => d.feedMl), 100) // min 100 to avoid div by 0 or huge spikes
+      const maxSleep = Math.max(...days.map(d => d.sleepMinutes), 60) // min 60
+
+      const trend = days.map(d => {
+        return {
+          date: d.dateKey.slice(5), // MM-DD
+          feedHeight: (d.feedMl / maxFeed) * 100,
+          sleepHeight: (d.sleepMinutes / maxSleep) * 100,
+          feedVal: d.feedMl,
+          sleepVal: d.sleepMinutes
+        }
+      })
+
+      this.setData({ 
+        babyId, 
+        todayStats, 
+        weekStats: [...days].reverse(), // Create copy before reverse
+        visuals: {
+          trend,
+          todaySleep
+        }
+      })
     },
 
     /**

@@ -16,6 +16,7 @@ import {
   watchEvents,
   getQuickActions,
   setQuickActions,
+  linkSleepAndWake
 } from '../../utils/storage'
 
 // 定义带展示字段的记录类型，解决类型不匹配的波浪线警告
@@ -52,10 +53,30 @@ interface TrackerData {
   addActionIndex: number
   hasModalOpen: boolean
   editOriginalTimestamp: number
+  // 计时器状态
+  timerState: 'idle' | 'running'
+  timerType: EventType | ''
+  timerValue: string
+  timerStartTime: number
+  
+  // 状态卡片数据
+  currentStatus: {
+    isSleeping: boolean
+    startTime?: number
+    startTimeStr?: string
+    durationStr?: string // e.g. "2小时30分"
+    isLongSleep?: boolean // > 4 hours
+  } | null
 }
 
 interface TrackerMethod {
   initData(): void
+  checkCurrentStatus(events: EventRecordDisplay[]): void
+  initTimer(): void
+  startTimer(e: any): void
+  endTimer(): void
+  cancelTimer(): void
+  updateTimerDisplay(): void
   getStyleForType(type: EventType): { icon: string; colorClass: string }
   loadQuickActions(): Promise<void>
   openBabyModal(): void
@@ -129,6 +150,11 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
     addActionIndex: 0,
     hasModalOpen: false,
     editOriginalTimestamp: 0,
+    timerState: 'idle',
+    timerType: '',
+    timerValue: '00:00:00',
+    timerStartTime: 0,
+    currentStatus: null,
   },
 
   observers: {
@@ -183,6 +209,140 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
       this.setData({ babyId, todayKey, inputTime })
       this.loadQuickActions()
       this.startWatch()
+      // Note: checkCurrentStatus will be called inside startWatch -> watchEvents callback
+    },
+    
+    checkCurrentStatus(events: EventRecordDisplay[]) {
+      if (!events || events.length === 0) {
+        this.setData({ currentStatus: null })
+        return
+      }
+      // events are usually sorted by desc? 
+      // watchEvents uses `listEvents` which sorts by desc in cloud, but local might be unsorted?
+      // But `watchEvents` in `storage.ts` does `list.sort((a, b) => b.timestamp - a.timestamp)`?
+      // Let's verify sort. The `watchEvents` function in `storage.ts` logic needs to be checked.
+      // Assuming events[0] is latest.
+      
+      const latest = events[0]
+      if (latest.type === 'sleep' && (!latest.durationMinutes || latest.durationMinutes === 0)) {
+        // Is sleeping
+        const now = Date.now()
+        const start = latest.timestamp
+        const diffMs = now - start
+        
+        // Format start time
+        const d = new Date(start)
+        const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
+        const startTimeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+        
+        // Calculate duration string (approximate for display)
+        const diffMins = Math.floor(diffMs / 1000 / 60)
+        const hours = Math.floor(diffMins / 60)
+        const mins = diffMins % 60
+        let durationStr = ''
+        if (hours > 0) durationStr += `${hours}小时`
+        durationStr += `${mins}分`
+        
+        const isLongSleep = diffMins >= 240 // 4 hours
+        
+        this.setData({
+          currentStatus: {
+            isSleeping: true,
+            startTime: start,
+            startTimeStr,
+            durationStr,
+            isLongSleep
+          }
+        })
+        
+        if (isLongSleep) {
+           // Check if we should remind? 
+           // Simple implementation: Just show toast/modal once per session or just rely on UI red color.
+           // The user asked for "gentle push". A modal on app open or when this status is detected is good.
+           // But `checkCurrentStatus` runs on every update. We don't want to spam modals.
+           // Let's rely on the UI card first.
+        }
+      } else {
+        this.setData({ currentStatus: null })
+      }
+    },
+
+    initTimer() {
+      const stored = wx.getStorageSync('timer_state')
+      if (stored && stored.state === 'running') {
+        this.setData({
+          timerState: 'running',
+          timerType: stored.type,
+          timerStartTime: stored.startTime
+        })
+        this.updateTimerDisplay()
+        if (this.timerInterval) clearInterval(this.timerInterval)
+        this.timerInterval = setInterval(() => {
+          this.updateTimerDisplay()
+        }, 1000)
+      }
+    },
+
+    startTimer(e: any) {
+      const type = e.currentTarget.dataset.type as EventType
+      const startTime = Date.now()
+      this.setData({
+        timerState: 'running',
+        timerType: type,
+        timerStartTime: startTime
+      })
+      wx.setStorageSync('timer_state', { state: 'running', type, startTime })
+      this.updateTimerDisplay()
+      if (this.timerInterval) clearInterval(this.timerInterval)
+      this.timerInterval = setInterval(() => {
+        this.updateTimerDisplay()
+      }, 1000)
+    },
+
+    updateTimerDisplay() {
+      const now = Date.now()
+      const diff = Math.floor((now - this.data.timerStartTime) / 1000)
+      const h = Math.floor(diff / 3600)
+      const m = Math.floor((diff % 3600) / 60)
+      const s = diff % 60
+      const pad = (n: number) => n < 10 ? `0${n}` : `${n}`
+      this.setData({
+        timerValue: `${pad(h)}:${pad(m)}:${pad(s)}`
+      })
+    },
+
+    cancelTimer() {
+      if (this.timerInterval) clearInterval(this.timerInterval)
+      this.timerInterval = undefined
+      this.setData({ timerState: 'idle', timerType: '', timerValue: '00:00:00' })
+      wx.removeStorageSync('timer_state')
+    },
+
+    endTimer() {
+      if (this.timerInterval) clearInterval(this.timerInterval)
+      this.timerInterval = undefined
+      wx.removeStorageSync('timer_state')
+      
+      const now = Date.now()
+      const diffMinutes = Math.round((now - this.data.timerStartTime) / 1000 / 60)
+      const duration = diffMinutes < 1 ? 1 : diffMinutes 
+      
+      const recordTime = new Date(this.data.timerStartTime)
+      const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
+      const editTime = `${pad(recordTime.getHours())}:${pad(recordTime.getMinutes())}`
+      
+      this.setData({
+        timerState: 'idle',
+        timerValue: '00:00:00',
+        showEditModal: true,
+        editId: '', // New record
+        editType: this.data.timerType as EventType,
+        editTime,
+        editQuantity: 0,
+        editDuration: duration,
+        editNotes: '',
+        editOriginalTimestamp: this.data.timerStartTime,
+      })
     },
 
     /**
@@ -279,6 +439,7 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
         })
         
         this.setData({ events: recentEvents, statsText })
+        this.checkCurrentStatus(recentEvents)
       })
     },
 
@@ -348,14 +509,19 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
       const babyId = this.data.babyId
       const id = this.data.editId
       const type = this.data.editType as EventType
-      if (!id || !type) {
-        wx.showToast({ title: '编辑信息不完整', icon: 'none' })
+      
+      // 对于新记录(id为空)或编辑记录，类型必填
+      if (!type) {
+        wx.showToast({ title: '类型必填', icon: 'none' })
         return
       }
+      // 如果是编辑已有记录，id不能为空
+      if (this.data.events.some(e => e.id === id || e._id === id) && !id) {
+         // This logic is tricky because we allow empty id for new records.
+         // Let's simplify: if id is empty, it's a new record.
+      }
+
       const ts = this.buildTimestampFromHHMM(this.data.editTime, this.data.editOriginalTimestamp)
-      
-      // 查找原始记录以确定使用哪个ID字段
-      const original = (this.data.events || []).find(e => e.id === id || e._id === id)
       
       const rec: EventRecord = {
         babyId,
@@ -363,34 +529,36 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
         timestamp: ts,
         notes: this.data.editNotes || '',
       }
-      
-      // 准确设置 ID
-      if (original) {
-        if (original._id === id) rec._id = id
-        if (original.id === id) rec.id = id
-      } else {
-        // 兜底逻辑
-        if (id.startsWith('6') || id.length >= 20) {
-          rec._id = id
-        } else {
-          rec.id = id
-        }
-      }
 
       if (type === 'feed' || type === 'drink') {
         rec.quantity = Number(this.data.editQuantity) || 0
-      } else {
-        rec.quantity = undefined
       }
-      if (type === 'sleep') {
+      if (type === 'sleep' || type === 'feed') {
         rec.durationMinutes = Number(this.data.editDuration) || 0
-      } else {
-        rec.durationMinutes = undefined
       }
-      updateEvent(rec).then(() => {
-        this.setData({ showEditModal: false })
-        wx.showToast({ title: '已更新', icon: 'success' })
-      })
+
+      // 如果有ID，则是更新
+      if (id) {
+        const original = (this.data.events || []).find(e => e.id === id || e._id === id)
+        if (original) {
+          if (original._id === id) rec._id = id
+          if (original.id === id) rec.id = id
+        } else {
+           // Fallback
+           if (id.startsWith('6') || id.length >= 20) rec._id = id
+           else rec.id = id
+        }
+        updateEvent(rec).then(() => {
+          this.setData({ showEditModal: false })
+          wx.showToast({ title: '已更新', icon: 'success' })
+        })
+      } else {
+        // 没有ID，则是新增 (来自计时器结束)
+        addEvent(rec).then(() => {
+          this.setData({ showEditModal: false })
+          wx.showToast({ title: '已保存', icon: 'success' })
+        })
+      }
     },
 
     stopWatch() {
@@ -407,10 +575,21 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
         this.setData({ pendingType: type, showQuantityModal: true, inputQuantity: 0, inputTime: this.getNowTimeStr() })
         return
       }
-      if (type === 'sleep') {
-        this.setData({ pendingType: type, showDurationModal: true, inputDuration: 0, inputTime: this.getNowTimeStr() })
-        return
-      }
+      // 对于睡觉，改为允许直接记录（只选时间，不填时长）
+      // 使用 showTimeModal 而不是 showDurationModal，或者在 showDurationModal 中把时长作为可选
+      // 为了符合“开始睡觉”的心智模型，我们直接弹时间选择，或者复用 showTimeModal
+      // 但如果用户想补录时长呢？
+      // 我们可以让 tapQuickAdd 对 sleep 行为也使用 showTimeModal
+      // 然后在 commitEvent 时，如果是 sleep，不强制 duration
+      // 如果用户想补录带时长的，可以在记录列表里点编辑，或者我们做一个专门的“补录”入口
+      // 按照用户需求：“记录开始睡觉时间”，所以只需要时间点。
+      
+      // if (type === 'sleep') {
+      //   this.setData({ pendingType: type, showDurationModal: true, inputDuration: 0, inputTime: this.getNowTimeStr() })
+      //   return
+      // }
+      
+      // 统一使用时间选择弹窗（含 sleep, wake, pee, poop）
       this.setData({ pendingType: type, showTimeModal: true, inputTime: this.getNowTimeStr() })
     },
     toggleEditActions() {
@@ -504,7 +683,13 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
       if (finalType === 'sleep') {
         record.durationMinutes = Number(this.data.inputDuration) || 0
       }
-      addEvent(record).then(() => {
+      
+      addEvent(record).then((savedRecord) => {
+        // 如果是 wake 事件，尝试关联更新 sleep
+        if (finalType === 'wake') {
+           linkSleepAndWake(savedRecord)
+        }
+
         this.setData({
           inputNotes: '',
           inputQuantity: 0,

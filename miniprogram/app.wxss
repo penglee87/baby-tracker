@@ -1,4 +1,57 @@
 /**app.wxss**/
+page {
+  /* Light Theme Variables */
+  --bg-color: #f6f6f6;
+  --card-bg: #ffffff;
+  --text-main: #333333;
+  --text-sub: #999999;
+  --divider-color: #eeeeee;
+  --primary-color: #07c160;
+  --danger-color: #ff4d4f;
+  --overlay-bg: rgba(0,0,0,0.5);
+  
+  /* Input/Modal */
+  --input-bg: #f8f8f8;
+  --modal-bg: #ffffff;
+
+  /* Functional Colors (Light) */
+  --bg-orange: #fff7e6; --text-orange: #d46b08;
+  --bg-blue: #e6f7ff; --text-blue: #096dd9;
+  --bg-yellow: #feffe6; --text-yellow: #d4b106;
+  --bg-yellow-light: #fffbe6; --text-yellow-light: #faad14;
+  --bg-brown: #fff1f0; --text-brown: #cf1322;
+  --bg-purple: #f9f0ff; --text-purple: #722ed1;
+  --bg-gray: #f5f5f5; --text-gray: #595959;
+}
+
+@media (prefers-color-scheme: dark) {
+  page {
+    /* Dark Theme Variables */
+    --bg-color: #111111;
+    --card-bg: #1e1e1e;
+    --text-main: #e0e0e0;
+    --text-sub: #888888;
+    --divider-color: #333333;
+    --primary-color: #07c160;
+    --danger-color: #ff4d4f;
+    --overlay-bg: rgba(0,0,0,0.7);
+
+    /* Input/Modal */
+    --input-bg: #2c2c2c;
+    --modal-bg: #1e1e1e;
+
+    /* Functional Colors (Dark) */
+    /* Using darker backgrounds and lighter text */
+    --bg-orange: #442a00; --text-orange: #ffc069;
+    --bg-blue: #002766; --text-blue: #69c0ff;
+    --bg-yellow: #443b00; --text-yellow: #ffec3d;
+    --bg-yellow-light: #443b00; --text-yellow-light: #ffec3d;
+    --bg-brown: #430000; --text-brown: #ff7875;
+    --bg-purple: #22075e; --text-purple: #b37feb;
+    --bg-gray: #262626; --text-gray: #bfbfbf;
+  }
+}
+
 .container {
   height: 100%;
   display: flex;
