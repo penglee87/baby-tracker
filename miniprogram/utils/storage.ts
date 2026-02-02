@@ -151,10 +151,9 @@ export function saveBabies(babies: BabyProfile[]) {
 }
 
 /**
- * 新增或更新宝宝信息
- * 如果ID已存在则更新，否则新增
+ * 仅更新本地宝宝信息 (不同步云端)
  */
-export function upsertBaby(baby: BabyProfile) {
+export function updateLocalBaby(baby: BabyProfile) {
   const list = listBabies()
   const idx = list.findIndex((b) => b.id === baby.id)
   if (idx >= 0) {
@@ -169,6 +168,92 @@ export function upsertBaby(baby: BabyProfile) {
     list.push(baby)
   }
   saveBabies(list)
+}
+
+/**
+ * 新增或更新宝宝信息
+ * 优先同步云端，同时更新本地缓存
+ */
+export async function upsertBaby(baby: BabyProfile) {
+  // 1. 本地更新
+  updateLocalBaby(baby)
+
+  // 2. 云端同步
+  const db = initCloud()
+  if (db) {
+    try {
+      // 使用 set 覆写，确保云端与本地一致
+      // 注意：需要确保数据库权限允许写入
+      await db.collection('babies').doc(baby.id).set({
+        data: {
+          ...baby,
+          updatedAt: Date.now()
+        }
+      })
+    } catch (e) {
+      console.error('[Cloud] Sync baby failed:', e)
+    }
+  }
+}
+
+/**
+ * 同步所有宝宝的最新信息
+ * 从云端拉取最新数据更新本地缓存
+ */
+export async function syncBabies() {
+  const db = initCloud()
+  if (!db) return
+
+  const babies = listBabies()
+  const tasks = babies
+    .filter(b => b.id && b.id !== 'default')
+    .map(async (b) => {
+      try {
+        const res = await db.collection('babies').doc(b.id).get()
+        if (res.data) {
+          updateLocalBaby(res.data as BabyProfile)
+        }
+      } catch (e) {
+        // 忽略权限错误或记录不存在
+        console.warn(`[Cloud] Sync baby ${b.id} failed:`, e)
+      }
+    })
+  
+  await Promise.all(tasks)
+}
+
+/**
+ * 通过共享码（即BabyID）加入家庭
+ * 从云端拉取宝宝档案并保存到本地
+ */
+export async function joinFamily(shareCode: string): Promise<boolean> {
+  const db = initCloud()
+  if (!db) {
+    throw new Error('云服务未连接')
+  }
+
+  try {
+    // 1. 尝试从云端获取
+    const res = await db.collection('babies').doc(shareCode).get()
+    const baby = res.data as BabyProfile
+
+    // 2. 保存到本地
+    updateLocalBaby(baby)
+    
+    // 3. 切换为当前宝宝
+    setCurrentBabyId(baby.id)
+    return true
+  } catch (e) {
+    console.error('[Cloud] Join family failed:', e)
+    return false
+  }
+}
+
+/**
+ * 生成随机6位数字共享码
+ */
+export function generateShareCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
 /**

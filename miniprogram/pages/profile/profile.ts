@@ -9,6 +9,9 @@ import {
   upsertBaby,
   deleteBabyById,
   BabyProfile,
+  generateShareCode,
+  joinFamily,
+  syncBabies,
 } from '../../utils/storage'
 
 Component({
@@ -29,6 +32,10 @@ Component({
     editAvatarUrl: '',
     editGender: 'boy',
     editBirthday: '',
+
+    // Join Modal
+    showJoinModal: false,
+    joinCode: '',
   },
 
   /**
@@ -58,16 +65,54 @@ Component({
 
     // --- 弹窗操作 ---
     openCreate() {
+      const newCode = generateShareCode()
       this.setData({
         showEditModal: true,
         isCreate: true,
-        editId: '',
+        editId: newCode,
         editName: '',
         editAvatarUrl: '',
         editGender: 'boy',
         editBirthday: '',
       })
     },
+
+    openJoin() {
+      this.setData({ showJoinModal: true, joinCode: '' })
+    },
+    
+    closeJoin() {
+      this.setData({ showJoinModal: false })
+    },
+    
+    onJoinCodeInput(e: any) {
+      this.setData({ joinCode: e.detail.value })
+    },
+    
+    async confirmJoin() {
+      const code = (this.data.joinCode || '').trim()
+      if (!code) {
+        wx.showToast({ title: '请输入邀请码', icon: 'none' })
+        return
+      }
+      
+      wx.showLoading({ title: '查找中...' })
+      const success = await joinFamily(code)
+      wx.hideLoading()
+      
+      if (success) {
+        this.setData({ showJoinModal: false })
+        this.refresh()
+        wx.showToast({ title: '加入成功', icon: 'success' })
+      } else {
+        wx.showModal({
+          title: '加入失败',
+          content: '未找到该共享码，或云端权限不足。请确认：\n1. 对方已创建并同步数据\n2. 云数据库 "babies" 权限已设为"所有用户可读"',
+          showCancel: false
+        })
+      }
+    },
+
     openEdit(e: any) {
       const id = e.currentTarget.dataset.id
       const babies: BabyProfile[] = this.data.babies || []
@@ -99,27 +144,48 @@ Component({
     },
 
     /**
+     * 复制共享码
+     */
+    copyId(e: any) {
+      const id = e.currentTarget.dataset.id
+      if (id) {
+        wx.setClipboardData({
+          data: id,
+          success: () => wx.showToast({ title: '已复制共享码', icon: 'none' })
+        })
+      }
+    },
+
+    /**
      * 选择头像图片
-     * 选择后会自动保存到本地文件系统
+     * 优先上传到云存储，以便家庭共享
      */
     async chooseAvatar() {
       try {
         const res = await wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'] })
         const temp = res.tempFilePaths?.[0]
         if (!temp) return
-        // 将临时文件保存为永久文件，避免下次启动丢失
-        const saved = await new Promise<string>((resolve) => {
+
+        this.setData({ editAvatarUrl: temp }) // 先展示本地预览
+
+        // 尝试上传到云存储
+        if (wx.cloud) {
+          wx.showLoading({ title: '上传中...' })
           try {
-            wx.saveFile({
-              tempFilePath: temp,
-              success: (r) => resolve(r.savedFilePath),
-              fail: () => resolve(temp),
+            const cloudPath = `avatars/${Date.now()}-${Math.floor(Math.random() * 1000)}${temp.match(/\.[^.]+?$/)?.[0] || '.jpg'}`
+            const uploadRes = await wx.cloud.uploadFile({
+              cloudPath,
+              filePath: temp,
             })
-          } catch (_e) {
-            resolve(temp)
+            this.setData({ editAvatarUrl: uploadRes.fileID })
+            console.log('[Avatar] Uploaded:', uploadRes.fileID)
+          } catch (e) {
+            console.error('[Avatar] Upload failed:', e)
+            wx.showToast({ title: '上传失败，仅本地可见', icon: 'none' })
+          } finally {
+            wx.hideLoading()
           }
-        })
-        this.setData({ editAvatarUrl: saved })
+        }
       } catch (_e) {}
     },
 
@@ -205,6 +271,10 @@ Component({
   pageLifetimes: {
     show() {
       this.refresh()
+      // 尝试后台同步最新数据
+      syncBabies().then(() => {
+        this.refresh() // 同步完成后再次刷新UI以显示最新头像等
+      })
     }
   }
 })

@@ -17,16 +17,22 @@
           <text class="baby-name">{{currentBaby.name || '未命名宝宝'}}</text>
           <view class="status-tag">当前</view>
         </view>
-        <text class="baby-id">共享码：{{currentBaby.id || '未知'}}</text>
-      </view>
-      <view class="action-container">
-        <view class="icon-btn" bindtap="openEdit" data-id="{{currentBaby.id}}">
-          <text class="btn-icon">✎</text>
-          <text class="btn-label">编辑</text>
+        <view class="id-row">
+          <text class="baby-id">共享码：{{currentBaby.id || '未知'}}</text>
+          <view class="copy-btn" bindtap="copyId" data-id="{{currentBaby.id}}" wx:if="{{currentBaby.id}}">
+             <text class="copy-icon">📋</text>
+          </view>
         </view>
-        <view class="icon-btn" bindtap="deleteBaby" data-id="{{currentBaby.id}}">
-          <text class="btn-icon danger">🗑</text>
-          <text class="btn-label danger">删除</text>
+        <view class="baby-detail-row" wx:if="{{currentBaby.gender || currentBaby.birthday}}">
+           <text class="detail-tag {{currentBaby.gender}}">{{currentBaby.gender === 'boy' ? '男宝' : '女宝'}}</text>
+           <text class="detail-text" wx:if="{{currentBaby.birthday}}">{{currentBaby.birthday}}</text>
+        </view>
+      </view>
+      
+      <!-- Edit Button (Top Right) -->
+      <view class="card-actions">
+        <view class="action-icon-btn" bindtap="openEdit" data-id="{{currentBaby.id}}">
+          <text class="icon">✎</text>
         </view>
       </view>
     </view>
@@ -65,60 +71,90 @@
   </block>
 
   <view class="footer-spacer"></view>
-  
-  <view class="floating-footer">
-    <button class="main-btn" bindtap="openCreate">
-      <text class="plus-icon">+</text> 新增宝宝
+</view>
+
+<!-- Floating Footer -->
+<view class="floating-footer">
+  <view class="footer-btns">
+    <button class="main-btn secondary" bindtap="openJoin">
+      <text class="btn-icon">🔗</text> 加入家庭
+    </button>
+    <button class="main-btn primary" bindtap="openCreate">
+      <text class="plus-icon">+</text> 创建新宝宝
     </button>
   </view>
+</view>
 
-  <!-- Edit/Create Modal -->
-  <view class="overlay" wx:if="{{showEditModal}}">
-    <view class="modal">
-      <view class="modal-header">
-        <text class="modal-title">{{isCreate ? '新增宝宝' : '编辑宝宝'}}</text>
+<!-- Join Family Modal -->
+<view class="overlay" wx:if="{{showJoinModal}}">
+  <view class="modal">
+    <view class="modal-header">
+      <text class="modal-title">加入家庭</text>
+    </view>
+    <view class="modal-content">
+      <view class="form-item">
+        <text class="label">请输入共享码</text>
+        <input class="input" placeholder="例如: 123456" bindinput="onJoinCodeInput" value="{{joinCode}}" type="number" />
+        <text class="hint" style="font-size:12px;color:#999;margin-top:4px;">请向家庭成员索要宝宝的共享码</text>
       </view>
-      <view class="modal-content">
-        <view class="form-item" wx:if="{{isCreate}}">
-          <text class="label">共享码 <text class="desc">(唯一标识)</text></text>
-          <input class="input" placeholder="例如: family-001" bindinput="onEditIdInput" value="{{editId}}" />
-        </view>
-        <view class="form-item">
-          <text class="label">宝宝昵称</text>
-          <input class="input" placeholder="例如: 小宝" bindinput="onEditNameInput" value="{{editName}}" />
-        </view>
-        <view class="form-item">
-          <text class="label">性别</text>
-          <radio-group class="gender-group" bindchange="onEditGenderChange">
-            <label class="radio-label">
-              <radio value="boy" checked="{{editGender === 'boy'}}" color="#9F85FF"/> 男宝
-            </label>
-            <label class="radio-label">
-              <radio value="girl" checked="{{editGender === 'girl'}}" color="#FF85C0"/> 女宝
-            </label>
-          </radio-group>
-        </view>
-        <view class="form-item">
-          <text class="label">出生日期</text>
-          <picker mode="date" value="{{editBirthday}}" bindchange="onEditBirthdayChange">
-             <view class="picker-input {{editBirthday ? '' : 'placeholder'}}">
-               {{editBirthday || '请选择出生日期'}}
-             </view>
-          </picker>
-        </view>
-        <view class="form-item">
-          <text class="label">头像</text>
-          <view class="avatar-selector" bindtap="chooseAvatar">
-            <image wx:if="{{editAvatarUrl}}" class="avatar-preview" src="{{editAvatarUrl}}" mode="aspectFill" />
-            <view wx:else class="avatar-preview placeholder">📷</view>
-            <text class="select-hint">点击更换头像</text>
-          </view>
+    </view>
+    <view class="modal-footer">
+      <button class="modal-btn cancel" bindtap="closeJoin">取消</button>
+      <button class="modal-btn confirm" bindtap="confirmJoin">加入</button>
+    </view>
+  </view>
+</view>
+
+<!-- Edit/Create Modal -->
+<view class="overlay" wx:if="{{showEditModal}}">
+  <view class="modal">
+    <view class="modal-header">
+      <text class="modal-title">{{isCreate ? '创建新宝宝' : '编辑宝宝'}}</text>
+    </view>
+    <view class="modal-content">
+      <view class="form-item" wx:if="{{isCreate}}">
+        <text class="label">共享码 <text class="desc">(自动生成)</text></text>
+        <input class="input" placeholder="例如: family-001" bindinput="onEditIdInput" value="{{editId}}" disabled="{{true}}" />
+        <text class="hint" style="font-size:12px;color:#999;margin-top:4px;">将此码分享给家人即可加入家庭</text>
+      </view>
+      <view class="form-item">
+        <text class="label">宝宝昵称</text>
+        <input class="input" placeholder="例如: 小宝" bindinput="onEditNameInput" value="{{editName}}" />
+      </view>
+      <view class="form-item">
+        <text class="label">性别</text>
+        <radio-group class="gender-group" bindchange="onEditGenderChange">
+          <label class="radio-label">
+            <radio value="boy" checked="{{editGender === 'boy'}}" color="#9F85FF"/> 男宝
+          </label>
+          <label class="radio-label">
+            <radio value="girl" checked="{{editGender === 'girl'}}" color="#FF85C0"/> 女宝
+          </label>
+        </radio-group>
+      </view>
+      <view class="form-item">
+        <text class="label">出生日期</text>
+        <picker mode="date" value="{{editBirthday}}" bindchange="onEditBirthdayChange">
+            <view class="picker-input {{editBirthday ? '' : 'placeholder'}}">
+              {{editBirthday || '请选择出生日期'}}
+            </view>
+        </picker>
+      </view>
+      <view class="form-item">
+        <text class="label">头像</text>
+        <view class="avatar-selector" bindtap="chooseAvatar">
+          <image wx:if="{{editAvatarUrl}}" class="avatar-preview" src="{{editAvatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar-preview placeholder">📷</view>
+          <text class="select-hint">点击更换头像</text>
         </view>
       </view>
-      <view class="modal-footer">
-        <button class="modal-btn cancel" bindtap="cancelEdit">取消</button>
-        <button class="modal-btn confirm" bindtap="saveEdit">保存</button>
+      <view class="form-item" wx:if="{{!isCreate}}">
+        <button class="delete-btn-text" bindtap="deleteBaby" data-id="{{editId}}">删除此宝宝</button>
       </view>
+    </view>
+    <view class="modal-footer">
+      <button class="modal-btn cancel" bindtap="cancelEdit">取消</button>
+      <button class="modal-btn confirm" bindtap="saveEdit">保存</button>
     </view>
   </view>
 </view>
