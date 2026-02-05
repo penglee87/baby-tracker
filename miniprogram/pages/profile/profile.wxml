@@ -5,37 +5,102 @@
   </view>
 
   <!-- Current Baby Card -->
-  <view class="section-label">当前宝宝</view>
-  <view class="card current-card">
+  <view class="section-label" wx:if="{{currentBaby && currentBaby.id}}">当前宝宝</view>
+  <view class="card current-card" wx:if="{{currentBaby && currentBaby.id}}">
     <view class="card-body">
-      <view class="avatar-container">
-        <image wx:if="{{currentBaby.avatarUrl}}" class="avatar" src="{{currentBaby.avatarUrl}}" mode="aspectFill" />
-        <view wx:else class="avatar placeholder">👶</view>
-      </view>
-      <view class="info-container">
-        <view class="name-row">
-          <text class="baby-name">{{currentBaby.name || '未命名宝宝'}}</text>
-          <view class="status-tag">当前</view>
+      <view class="current-card-header">
+        <view class="avatar-container">
+          <image wx:if="{{currentBaby.avatarUrl}}" class="avatar" src="{{currentBaby.avatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar placeholder">👶</view>
         </view>
-        <view class="id-row">
-          <text class="baby-id">共享码：{{currentBaby.id || '未知'}}</text>
-          <view class="copy-btn" bindtap="copyId" data-id="{{currentBaby.id}}" wx:if="{{currentBaby.id}}">
-             <text class="copy-icon">📋</text>
+        <view class="info-container">
+          <view class="name-row">
+            <text class="baby-name">{{currentBaby.name || '未命名宝宝'}}</text>
+            <view class="status-tag">当前</view>
+          </view>
+          <view class="id-row">
+            <text class="baby-id">ID: {{currentBaby.id || '未知'}}</text>
+          </view>
+          <view class="baby-detail-row" wx:if="{{currentBaby.gender || currentBaby.birthday}}">
+             <text class="detail-tag {{currentBaby.gender}}">{{currentBaby.gender === 'boy' ? '男宝' : '女宝'}}</text>
+             <text class="detail-text" wx:if="{{currentBaby.birthday}}">{{currentBaby.birthday}}</text>
+          </view>
+          <view wx:if="{{showPermissionTip}}" style="font-size:10px;color:#faad14;margin-top:4px;">
+            ⚠️ 头像无法加载: 请创建者设置云存储权限为"所有用户可读"
           </view>
         </view>
-        <view class="baby-detail-row" wx:if="{{currentBaby.gender || currentBaby.birthday}}">
-           <text class="detail-tag {{currentBaby.gender}}">{{currentBaby.gender === 'boy' ? '男宝' : '女宝'}}</text>
-           <text class="detail-text" wx:if="{{currentBaby.birthday}}">{{currentBaby.birthday}}</text>
+        
+        <!-- Edit/Share Buttons (Top Right) -->
+        <view class="card-actions">
+          <view class="action-icon-btn" bindtap="openShare" style="margin-right: 12px;">
+            <text class="icon">🔗</text>
+          </view>
+          <view class="action-icon-btn" bindtap="openEdit" data-id="{{currentBaby.id}}">
+            <text class="icon">✎</text>
+          </view>
         </view>
       </view>
-      
-      <!-- Edit Button (Top Right) -->
-      <view class="card-actions">
-        <view class="action-icon-btn" bindtap="openEdit" data-id="{{currentBaby.id}}">
-          <text class="icon">✎</text>
+
+      <!-- Family Members Grid (Nested) -->
+      <view class="divider"></view>
+      <view class="family-section">
+        <text class="section-title-small">家庭成员</text>
+        <view class="member-grid compact">
+          <!-- Creator -->
+          <view class="member-item">
+            <view class="avatar-container tiny">
+               <image wx:if="{{currentBaby.creatorInfo && currentBaby.creatorInfo.avatarUrl}}" class="avatar" src="{{currentBaby.creatorInfo.avatarUrl}}" mode="aspectFill" />
+               <view wx:else class="avatar placeholder">👑</view>
+            </view>
+            <text class="member-name">{{currentBaby.creatorInfo.nickName || '创建者'}}</text>
+            <text class="role-badge">主</text>
+          </view>
+          
+          <block wx:if="{{familyMembers.length > 0}}">
+            <block wx:for="{{familyMembers}}" wx:key="_id">
+              <view class="member-item">
+                <view class="avatar-container tiny">
+                   <image wx:if="{{item.userInfo.avatarUrl}}" class="avatar" src="{{item.userInfo.avatarUrl}}" mode="aspectFill" />
+                   <view wx:else class="avatar placeholder">👤</view>
+                </view>
+                <text class="member-name">{{item.userInfo.nickName || '成员'}}</text>
+              </view>
+            </block>
+          </block>
+          <block wx:else>
+            <view class="empty-member-text">
+              <text>暂无其他成员</text>
+            </view>
+          </block>
+          
+          <!-- Add Member Button -->
+          <view class="member-item add-btn" bindtap="openShare">
+             <view class="avatar-container tiny dashed">
+                <text style="font-size:16px;color:#ccc;">+</text>
+             </view>
+             <text class="member-name" style="color:#999;">邀请</text>
+          </view>
         </view>
       </view>
     </view>
+  </view>
+
+  <!-- Empty State -->
+  <view class="empty-state" wx:if="{{!currentBaby || !currentBaby.id}}">
+    <view class="empty-icon">👶</view>
+    <text class="empty-text">您还没有添加任何宝宝</text>
+    <view class="empty-action" bindtap="openCreate">
+       <button class="action-btn primary small">创建宝宝</button>
+    </view>
+    <view class="empty-action-sub" bindtap="openJoin">
+       <text class="link-text">或加入已有家庭</text>
+    </view>
+  </view>
+
+  <!-- DB Permission Warning -->
+  <view wx:if="{{showDBPermissionError}}" class="permission-warning">
+    <text>⚠️ 无法加载成员列表：数据库权限不足。</text>
+    <text>请在云开发控制台将 join_requests 集合权限设置为“所有用户可读写”。</text>
   </view>
 
   <!-- Other Babies List -->
@@ -85,6 +150,28 @@
   </view>
 </view>
 
+<!-- Share Modal -->
+<view class="overlay" wx:if="{{showShareModal}}">
+  <view class="modal">
+    <view class="modal-header">
+      <text class="modal-title">邀请家人加入</text>
+    </view>
+    <view class="modal-content" style="text-align: center;">
+      <view class="share-code-box">
+        <text class="share-code">{{shareCode}}</text>
+      </view>
+      <text class="share-expire">{{shareExpire}}</text>
+      <view class="share-desc">
+        <text>请对方点击“加入家庭”并输入此码\n(验证通过后直接加入)</text>
+      </view>
+    </view>
+    <view class="modal-footer">
+      <button class="modal-btn confirm" bindtap="copyShareCode">复制邀请码</button>
+      <button class="modal-btn cancel" bindtap="closeShare">关闭</button>
+    </view>
+  </view>
+</view>
+
 <!-- Join Family Modal -->
 <view class="overlay" wx:if="{{showJoinModal}}">
   <view class="modal">
@@ -93,14 +180,25 @@
     </view>
     <view class="modal-content">
       <view class="form-item">
-        <text class="label">请输入共享码</text>
-        <input class="input" placeholder="例如: 123456" bindinput="onJoinCodeInput" value="{{joinCode}}" type="number" />
-        <text class="hint" style="font-size:12px;color:#999;margin-top:4px;">请向家庭成员索要宝宝的共享码</text>
+        <text class="label">请输入邀请码</text>
+        <input class="input" placeholder="6位数字邀请码" bindinput="onJoinCodeInput" value="{{joinCode}}" type="number" />
+        <text class="hint" style="font-size:12px;color:#999;margin-top:4px;">请向家庭成员索要邀请码</text>
+      </view>
+      <view class="divider" style="margin: 16px 0;"></view>
+      <view class="form-item">
+        <text class="label">您的身份信息</text>
+        <view class="user-auth-row">
+          <button class="avatar-wrapper" open-type="chooseAvatar" bindchooseavatar="onChooseJoinAvatar">
+            <image wx:if="{{joinAvatarUrl}}" class="avatar-small" src="{{joinAvatarUrl}}" mode="aspectFill"></image>
+            <view wx:else class="avatar-placeholder-small">👤</view>
+          </button> 
+          <input type="nickname" class="input nickname-input" placeholder="请输入昵称 (如: 爸爸)" bindblur="onJoinNicknameInput" value="{{joinNickName}}" />
+        </view>
       </view>
     </view>
     <view class="modal-footer">
       <button class="modal-btn cancel" bindtap="closeJoin">取消</button>
-      <button class="modal-btn confirm" bindtap="confirmJoin">加入</button>
+      <button class="modal-btn confirm" bindtap="submitJoin">申请加入</button>
     </view>
   </view>
 </view>
@@ -147,9 +245,24 @@
           <view wx:else class="avatar-preview placeholder">📷</view>
           <text class="select-hint">点击更换头像</text>
         </view>
+        <view wx:if="{{showLocalAvatarWarning}}" style="font-size:12px;color:#faad14;margin-top:4px;">
+          ⚠️ 头像未同步到云端，其他人无法查看，请重新上传
+        </view>
       </view>
       <view class="form-item" wx:if="{{!isCreate}}">
-        <button class="delete-btn-text" bindtap="deleteBaby" data-id="{{editId}}">删除此宝宝</button>
+        <button class="delete-btn-text" bindtap="deleteBaby" data-id="{{editId}}">{{isMember ? '退出家庭' : '从我的列表中移除'}}</button>
+      </view>
+
+      <view class="form-item" wx:if="{{isCreate}}">
+        <view class="divider" style="margin: 16px 0;"></view>
+        <text class="label">您的身份 (创建者)</text>
+        <view class="user-auth-row">
+          <button class="avatar-wrapper" open-type="chooseAvatar" bindchooseavatar="onChooseCreatorAvatar">
+            <image wx:if="{{creatorAvatarUrl}}" class="avatar-small" src="{{creatorAvatarUrl}}" mode="aspectFill"></image>
+            <view wx:else class="avatar-placeholder-small">👑</view>
+          </button> 
+          <input type="nickname" class="input nickname-input" placeholder="请输入昵称 (如: 妈妈)" bindblur="onCreatorNicknameInput" value="{{creatorNickName}}" />
+        </view>
       </view>
     </view>
     <view class="modal-footer">

@@ -14,8 +14,7 @@ export type EventType = 'feed' | 'drink' | 'pee' | 'poop' | 'sleep' | 'wake'
  * 对应一条具体的宝宝行为记录
  */
 export interface EventRecord {
-  _id?: string       // 云数据库自动生成的ID
-  id?: string        // 本地生成的唯一ID (降级模式使用)
+  _id?: string       // 云数据库自动生成的ID (作为唯一标识)
   babyId: string     // 关联的宝宝ID
   type: EventType    // 事件类型
   timestamp: number  // 发生时间戳
@@ -87,9 +86,14 @@ const CURRENT_BABY_KEY = `${LOCAL_KEY_PREFIX}current_baby`
 export function getCurrentBabyId(): string {
   const id = wx.getStorageSync(CURRENT_BABY_KEY)
   if (id) return id
-  const defaultId = 'default'
-  wx.setStorageSync(CURRENT_BABY_KEY, defaultId)
-  return defaultId
+  // If no baby is selected, try to find the first one
+  const babies = listBabies()
+  if (babies.length > 0) {
+    const firstId = babies[0].id
+    wx.setStorageSync(CURRENT_BABY_KEY, firstId)
+    return firstId
+  }
+  return ''
 }
 
 /**
@@ -104,11 +108,18 @@ export function setCurrentBabyId(id: string) {
  * 宝宝档案信息
  */
 export type BabyProfile = {
+  _id?: string        // Cloud DB ID
+  _openid?: string    // Creator OpenID
   id: string          // 唯一标识 (通常为共享码)
   name: string        // 昵称
   avatarUrl?: string  // 头像地址
   gender?: 'boy' | 'girl' // 性别
   birthday?: string   // 出生日期 YYYY-MM-DD
+  role?: 'owner' | 'member' // 用户角色 (本地计算字段)
+  creatorInfo?: {             // 创建者信息 (用于展示)
+    nickName: string
+    avatarUrl: string
+  }
 }
 
 const BABIES_KEY = `${LOCAL_KEY_PREFIX}babies`
@@ -132,15 +143,19 @@ export function listBabies(): BabyProfile[] {
         name: b.name || '未命名宝宝', 
         avatarUrl: b.avatarUrl || '',
         gender: b.gender,
-        birthday: b.birthday
+        birthday: b.birthday,
+        role: b.role || 'owner', // 默认为owner (兼容旧数据：旧数据都是创建者生成的)
+        _openid: b._openid,
+        creatorInfo: b.creatorInfo
       })
     })
   }
-  if (list.length) return list
-  // 如果列表为空，初始化默认宝宝
-  const defaults: BabyProfile[] = [{ id: 'default', name: '默认宝宝' }]
-  wx.setStorageSync(BABIES_KEY, defaults)
-  return defaults
+  // Remove default baby creation logic to allow empty state
+  // if (list.length) return list
+  // const defaults: BabyProfile[] = [{ id: 'default', name: '默认宝宝', role: 'owner' }]
+  // wx.setStorageSync(BABIES_KEY, defaults)
+  // return defaults
+  return list
 }
 
 /**
@@ -156,16 +171,24 @@ export function saveBabies(babies: BabyProfile[]) {
 export function updateLocalBaby(baby: BabyProfile) {
   const list = listBabies()
   const idx = list.findIndex((b) => b.id === baby.id)
+  
   if (idx >= 0) {
+    // 保留原有的 role
+    const existingRole = list[idx].role || 'owner' // 如果原有role不存在，说明是老数据(owner)
     list[idx] = { 
       ...list[idx], 
-      name: baby.name, 
-      avatarUrl: baby.avatarUrl,
-      gender: baby.gender,
-      birthday: baby.birthday
+      ...baby,
+      role: existingRole // 优先使用本地已有的role，防止被覆盖
+    }
+    // 如果 baby.role 显式存在且不同 (例如重新 joinFamily 更新权限)，则可以考虑覆盖，但一般 joinFamily 会走 push 逻辑或者 distinct 逻辑
+    // 简单起见，本地 role 优先级最高，除非显式重置
+    if (baby.role) {
+       list[idx].role = baby.role
     }
   } else {
-    list.push(baby)
+    // 新增宝宝，如果是通过邀请加入的，通常是 member
+    // 如果是新建的，upsertBaby 会处理
+    list.push({ ...baby, role: baby.role || 'member' })
   }
   saveBabies(list)
 }
@@ -176,6 +199,12 @@ export function updateLocalBaby(baby: BabyProfile) {
  */
 export async function upsertBaby(baby: BabyProfile) {
   // 1. 本地更新
+  // 如果是新建(本地不存在)，则默认为 owner
+  const list = listBabies()
+  const exists = list.find(b => b.id === baby.id)
+  if (!exists) {
+    baby.role = 'owner'
+  }
   updateLocalBaby(baby)
 
   // 2. 云端同步
@@ -184,9 +213,12 @@ export async function upsertBaby(baby: BabyProfile) {
     try {
       // 使用 set 覆写，确保云端与本地一致
       // 注意：需要确保数据库权限允许写入
+      // 不将 role 字段存入云端 data 字段，因为它是由 _openid 决定的
+      // 但是为了简化，我们只存基本信息
+      const { role, ...cloudData } = baby
       await db.collection('babies').doc(baby.id).set({
         data: {
-          ...baby,
+          ...cloudData,
           updatedAt: Date.now()
         }
       })
@@ -205,21 +237,58 @@ export async function syncBabies() {
   if (!db) return
 
   const babies = listBabies()
-  const tasks = babies
-    .filter(b => b.id && b.id !== 'default')
-    .map(async (b) => {
+  
+  // 1. 同步用户创建的宝宝 (Owner)
+  // 获取云端该用户创建的所有宝宝
+  try {
+    const res = await db.collection('babies').where({
+       _openid: '{openid}' // 自动匹配当前用户
+    }).get()
+    
+    if (res.data) {
+       const cloudMyBabies = res.data as BabyProfile[]
+       
+       // 更新或添加本地
+       cloudMyBabies.forEach(b => {
+          // 确保 role 正确
+          updateLocalBaby({ ...b, role: 'owner' })
+       })
+       
+       // 检查本地是 owner 但云端不存在的 -> 说明云端已删除
+       const localOwners = babies.filter(b => b.role === 'owner')
+       localOwners.forEach(local => {
+          const existsInCloud = cloudMyBabies.find(cloud => cloud.id === local.id)
+          if (!existsInCloud) {
+             deleteBabyById(local.id)
+          }
+       })
+    }
+  } catch (e) {
+    console.warn('[Cloud] Sync owned babies failed:', e)
+  }
+
+  // 2. 同步作为成员加入的宝宝 (Member)
+  // 对于 Member 角色，逐个检查存在性
+  const members = listBabies().filter(b => b.role === 'member')
+  const memberTasks = members.map(async (b) => {
       try {
         const res = await db.collection('babies').doc(b.id).get()
         if (res.data) {
           updateLocalBaby(res.data as BabyProfile)
         }
-      } catch (e) {
-        // 忽略权限错误或记录不存在
-        console.warn(`[Cloud] Sync baby ${b.id} failed:`, e)
+      } catch (e: any) {
+        // 如果明确是记录不存在，则本地删除
+        const errStr = e.message || e.errMsg || JSON.stringify(e)
+        if (errStr.includes('document not found') || errStr.includes('does not exist') || e.errCode === -1) {
+           console.log(`[Cloud] Baby ${b.id} not found, removing locally`)
+           deleteBabyById(b.id)
+        } else {
+           console.warn(`[Cloud] Sync member baby ${b.id} failed:`, e)
+        }
       }
-    })
+  })
   
-  await Promise.all(tasks)
+  await Promise.all(memberTasks)
 }
 
 /**
@@ -238,7 +307,9 @@ export async function joinFamily(shareCode: string): Promise<boolean> {
     const baby = res.data as BabyProfile
 
     // 2. 保存到本地
-    updateLocalBaby(baby)
+    // 显式标记为 member
+    const babyWithRole = { ...baby, role: 'member' } as BabyProfile
+    updateLocalBaby(babyWithRole)
     
     // 3. 切换为当前宝宝
     setCurrentBabyId(baby.id)
@@ -255,6 +326,240 @@ export async function joinFamily(shareCode: string): Promise<boolean> {
 export function generateShareCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
+
+/**
+ * 邀请码信息接口
+ */
+export interface InvitationCode {
+  _id?: string
+  code: string        // 6位随机码
+  babyId: string      // 关联的真实BabyID
+  expiresAt: number   // 过期时间戳
+  status: 'active' | 'used' | 'expired'
+  createdBy?: string  // 创建人openid
+}
+
+/**
+ * 加入请求接口
+ */
+export interface JoinRequest {
+  _id?: string
+  babyId: string
+  userId: string      // 申请人openid
+  userInfo: {
+    nickName: string
+    avatarUrl: string
+  }
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt: number
+}
+
+/**
+ * 创建临时邀请码 (有效期30分钟)
+ */
+export async function createInvitation(babyId: string): Promise<string> {
+  const db = initCloud()
+  if (!db) throw new Error('需联网生成邀请码')
+
+  const code = generateShareCode()
+  const expiresAt = Date.now() + 30 * 60 * 1000 // 30 minutes
+
+  try {
+    await db.collection('invitations').add({
+      data: {
+        code,
+        babyId,
+        expiresAt,
+        status: 'active',
+        createdAt: Date.now()
+      }
+    })
+    return code
+  } catch (e: any) {
+    console.error('Create invitation failed:', e)
+    const errStr = e.message || e.errMsg || JSON.stringify(e)
+    throw new Error(`生成邀请码失败: ${errStr}`)
+  }
+}
+
+/**
+ * 验证邀请码并直接加入家庭 (简化流程：无需审核)
+ * 验证通过后，直接在 join_requests 表中插入 approved 记录，并返回宝宝信息供本地保存
+ */
+export async function confirmJoinFamily(code: string, userInfo: { nickName: string, avatarUrl: string }): Promise<{ success: boolean, message: string, baby?: BabyProfile }> {
+  const db = initCloud()
+  if (!db) throw new Error('需联网加入')
+
+  try {
+    // 1. 验证邀请码
+    const res = await db.collection('invitations')
+      .where({
+        code,
+        status: 'active',
+        expiresAt: db.command.gt(Date.now())
+      })
+      .get()
+
+    if (!res.data || res.data.length === 0) {
+      return { success: false, message: '邀请码无效或已过期' }
+    }
+    
+    const invite = res.data[0] as InvitationCode
+    const babyId = invite.babyId
+
+    // 2. 获取宝宝详细信息
+    const babyRes = await db.collection('babies').doc(babyId).get()
+    if (!babyRes.data) {
+      return { success: false, message: '宝宝信息不存在' }
+    }
+    const baby = babyRes.data as BabyProfile
+
+    // 3. 检查是否已经加入过
+    // 简化处理：查询 join_requests 是否已有记录 (不区分 pending/approved，只要有记录就算加入过)
+    const existing = await db.collection('join_requests')
+      .where({
+        babyId,
+        // _openid: '{openid}' // 隐式条件
+      })
+      .get()
+
+    if (existing.data.length > 0) {
+       // 已经加入过了，直接返回成功，并在本地更新宝宝信息
+       return { success: true, message: '您已加入该家庭', baby }
+    }
+
+    // 4. 插入加入记录 (状态直接为 approved)
+    await db.collection('join_requests').add({
+      data: {
+        babyId,
+        userInfo,
+        status: 'approved', // 直接通过
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+    })
+
+    return { success: true, message: '加入家庭成功', baby }
+  } catch (e: any) {
+    console.error('Confirm join failed:', e)
+    const errStr = e.message || e.errMsg || JSON.stringify(e)
+    let msg = `加入失败: ${errStr}`
+    
+    // 权限提示
+    if (errStr.includes('permission') || errStr.includes('do not exist')) {
+       msg = '加入失败: 请联系管理员将云数据库 join_requests 集合权限设置为“所有用户可读写”'
+    }
+    return { success: false, message: msg }
+  }
+}
+
+/**
+ * 获取待审核的加入请求 (管理员视角)
+ */
+export async function listPendingRequests(babyId: string): Promise<JoinRequest[]> {
+  const db = initCloud()
+  if (!db) return []
+
+  try {
+    const res = await db.collection('join_requests')
+      .where({
+        babyId,
+        status: 'pending'
+      })
+      .orderBy('createdAt', 'desc')
+      .get()
+    return res.data as JoinRequest[]
+  } catch (e: any) {
+    console.error('List pending requests failed:', e)
+    // 抛出错误以便 UI 层捕获并提示权限问题
+    throw e
+  }
+}
+
+/**
+ * 获取家庭成员列表 (已加入的)
+ */
+export async function listFamilyMembers(babyId: string): Promise<JoinRequest[]> {
+  const db = initCloud()
+  if (!db) return []
+
+  try {
+    const res = await db.collection('join_requests')
+      .where({
+        babyId,
+        status: 'approved'
+      })
+      .orderBy('updatedAt', 'desc')
+      .get()
+    return res.data as JoinRequest[]
+  } catch (e) {
+    console.error('List family members failed:', e)
+    throw e
+  }
+}
+
+/**
+ * 处理加入请求 (通过/拒绝)
+ */
+export async function handleJoinRequest(requestId: string, action: 'approve' | 'reject'): Promise<void> {
+  const db = initCloud()
+  if (!db) return
+
+  try {
+    await db.collection('join_requests').doc(requestId).update({
+      data: {
+        status: action === 'approve' ? 'approved' : 'rejected',
+        updatedAt: Date.now()
+      }
+    })
+  } catch (e: any) {
+    console.error('Handle request failed:', e)
+    const errStr = e.message || e.errMsg || JSON.stringify(e)
+    if (errStr.includes('permission')) {
+        throw new Error('操作失败: 权限不足，请确保 join_requests 集合允许所有用户读写')
+    }
+    throw new Error(`操作失败: ${errStr}`)
+  }
+}
+
+/**
+ * 检查我的申请状态 (被邀请人视角)
+ * 如果有已通过的申请，自动加入家庭
+ */
+export async function checkMyJoinStatus(): Promise<boolean> {
+  const db = initCloud()
+  if (!db) return false
+
+  try {
+    const res = await db.collection('join_requests')
+      .where({
+        status: 'approved'
+        // _openid implicit
+      })
+      .get()
+
+    if (res.data.length > 0) {
+      let newJoin = false
+      for (const req of res.data) {
+        const r = req as JoinRequest
+        // 获取宝宝信息并保存
+        const babyRes = await db.collection('babies').doc(r.babyId).get()
+        if (babyRes.data) {
+           updateLocalBaby(babyRes.data as BabyProfile)
+           // 标记请求已处理 (防止重复拉取? 或者我们只看本地是否已有)
+           // 实际上 updateLocalBaby 是幂等的
+           newJoin = true
+        }
+        
+        // 可选：将请求标记为 'processed' 或直接删除，以免每次都查
+        // 这里简单起见，暂不修改，因为查询量不大
+      }
+      return newJoin
+    }
+  } catch (e) {}
+  return false
+}
+
 
 /**
  * 成长记录接口 (身高体重)
@@ -319,35 +624,35 @@ export async function listGrowthRecords(babyId: string): Promise<GrowthRecord[]>
 
 /**
  * 添加成长记录
+ * 必须联网
  */
 export async function addGrowthRecord(rec: GrowthRecord): Promise<GrowthRecord> {
   const database = initCloud()
+  if (!database) throw new Error('需联网使用')
+
   const toSave = { ...rec }
-  let saved = false
+  
+  try {
+    const res = await database.collection('growth').add({
+      data: {
+        ...toSave,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+    })
+    toSave.id = String(res._id)
 
-  if (database) {
-    try {
-      const res = await database.collection('growth').add({
-        data: {
-          ...toSave,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        }
-      })
-      toSave.id = String(res._id)
-      saved = true
-    } catch (e) {}
-  }
-
-  if (!saved) {
+    // Update Cache
     const key = localGrowthKey(rec.babyId)
     const list: GrowthRecord[] = wx.getStorageSync(key) || []
-    toSave.id = `${Date.now()}_${Math.random().toString(36).slice(2)}`
     list.unshift(toSave)
-    list.sort((a, b) => b.date.localeCompare(a.date)) // Keep sorted
+    list.sort((a, b) => b.date.localeCompare(a.date))
     wx.setStorageSync(key, list)
+
+    return toSave
+  } catch (e) {
+    throw new Error('保存失败，请检查网络')
   }
-  return toSave
 }
 
 /**
@@ -372,37 +677,70 @@ export async function listMilestones(babyId: string): Promise<MilestoneRecord[]>
 
 /**
  * 添加里程碑
+ * 必须联网
  */
 export async function addMilestone(rec: MilestoneRecord): Promise<MilestoneRecord> {
   const database = initCloud()
+  if (!database) throw new Error('需联网使用')
+
   const toSave = { ...rec }
-  let saved = false
+  
+  try {
+    const res = await database.collection('milestones').add({
+      data: {
+        ...toSave,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+    })
+    toSave.id = String(res._id)
 
-  if (database) {
-    try {
-      const res = await database.collection('milestones').add({
-        data: {
-          ...toSave,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        }
-      })
-      toSave.id = String(res._id)
-      saved = true
-    } catch (e) {}
-  }
-
-  if (!saved) {
+    // Update Cache
     const key = localMilestonesKey(rec.babyId)
     const list: MilestoneRecord[] = wx.getStorageSync(key) || []
-    toSave.id = `${Date.now()}_${Math.random().toString(36).slice(2)}`
     list.unshift(toSave)
     list.sort((a, b) => b.date.localeCompare(a.date))
     wx.setStorageSync(key, list)
+    
+    return toSave
+  } catch (e) {
+    throw new Error('保存失败，请检查网络')
   }
-  return toSave
 }
 
+
+/**
+ * 退出家庭 (被邀请人)
+ * 删除 join_requests 中的记录，并从本地移除
+ */
+export async function exitFamily(babyId: string): Promise<boolean> {
+  const db = initCloud()
+  
+  try {
+    // 1. 尝试从云端删除申请记录
+    if (db) {
+      // 小程序端 remove 必须使用 docId，不能直接 where().remove()
+      const res = await db.collection('join_requests').where({
+        babyId: babyId
+        // _openid: 隐式包含当前用户
+      }).get()
+
+      if (res.data && res.data.length > 0) {
+        const removeTasks = res.data.map(item => 
+           db.collection('join_requests').doc(String(item._id)).remove()
+        )
+        await Promise.all(removeTasks)
+      }
+    }
+    
+    // 2. 本地移除
+    deleteBabyById(babyId)
+    return true
+  } catch (e) {
+    console.error('Exit family failed:', e)
+    return false
+  }
+}
 
 /**
  * 删除指定ID的宝宝
@@ -451,44 +789,41 @@ function notifyListeners(babyId: string) {
 
 /**
  * 添加一条新事件记录
- * 优先尝试云端存储，失败则回退到本地存储
+ * 必须联网存储，写入成功后更新本地缓存
  */
 export async function addEvent(rec: EventRecord): Promise<EventRecord> {
   const database = initCloud()
+  if (!database) {
+    throw new Error('需要联网才能添加记录')
+  }
+
   const toSave: EventRecord = { ...rec }
-  let saved = false
   
   // 尝试云端存储
-  if (database) {
-    try {
-      const res = await database.collection('events').add({
-        data: {
-          ...toSave,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      })
-      toSave._id = String(res._id)
-      saved = true
-    } catch (e) {
-      // fallback to local
-    }
-  }
-  
-  // 如果云端失败或未启用，使用本地存储
-  if (!saved) {
+  try {
+    const res = await database.collection('events').add({
+      data: {
+        ...toSave,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    })
+    toSave._id = String(res._id)
+    
+    // 写入成功后，更新本地缓存 (Cache Aside)
+    // 注意：这里我们不再作为"数据源"，而是作为"读缓存"
     const key = localEventsKey(rec.babyId)
     const list: EventRecord[] = wx.getStorageSync(key) || []
-    // 生成本地唯一ID
-    const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`
-    toSave.id = id
     list.unshift(toSave)
     wx.setStorageSync(key, list)
+    
+    // 触发数据更新通知
+    notifyListeners(rec.babyId)
+    return toSave
+  } catch (e) {
+    console.error('[Cloud] Add event failed:', e)
+    throw new Error('添加失败，请检查网络')
   }
-  
-  // 触发数据更新通知
-  notifyListeners(rec.babyId)
-  return toSave
 }
 
 /**
@@ -762,11 +1097,10 @@ export function setQuickActions(babyId: string, actions: QuickAction[]) {
  */
 export async function updateEvent(rec: EventRecord): Promise<EventRecord> {
   const database = initCloud()
-  const id = rec._id || rec.id
-  if (!id) return rec
+  if (!rec._id) return rec // 必须有云端ID才能更新
   
   // 尝试更新云端数据
-  if (database && rec._id) {
+  if (database) {
     try {
       await database.collection('events').doc(rec._id).update({
         data: {
@@ -778,18 +1112,17 @@ export async function updateEvent(rec: EventRecord): Promise<EventRecord> {
           updatedAt: Date.now(),
         },
       })
-    } catch (e) {}
+    } catch (e) {
+      console.error('[Cloud] Update event failed:', e)
+      throw new Error('更新失败，请检查网络')
+    }
   }
   
-  // 更新本地存储
-  // 即使云端更新成功，本地也需要同步更新，或者作为降级方案
+  // 更新本地存储 (Cache Update)
   const key = localEventsKey(rec.babyId)
   const list: EventRecord[] = wx.getStorageSync(key) || []
-  const idx = list.findIndex((e) => {
-    if (rec.id && e.id === rec.id) return true
-    if (rec._id && e._id === rec._id) return true
-    return false
-  })
+  const idx = list.findIndex((e) => e._id === rec._id)
+  
   if (idx >= 0) {
     const merged: EventRecord = {
       ...list[idx],
@@ -810,31 +1143,27 @@ export async function updateEvent(rec: EventRecord): Promise<EventRecord> {
 /**
  * 删除事件记录
  * @param babyId 宝宝ID
- * @param idOrCloudId 记录的本地ID或云端ID
+ * @param _id 云端ID
  */
-export async function deleteEvent(babyId: string, idOrCloudId: string): Promise<void> {
+export async function deleteEvent(babyId: string, _id: string): Promise<void> {
   const database = initCloud()
-  let removed = false
+  if (!database) throw new Error('需联网删除')
   
   // 尝试从云端删除
-  if (database) {
-    try {
-      await database.collection('events').doc(idOrCloudId).remove()
-      removed = true
-    } catch (e) {}
+  try {
+    await database.collection('events').doc(_id).remove()
+  } catch (e) {
+    throw new Error('删除失败，请检查网络')
   }
   
   // 从本地存储删除
   const key = localEventsKey(babyId)
   const list: EventRecord[] = wx.getStorageSync(key) || []
-  const filtered = list.filter((e) => e.id !== idOrCloudId && e._id !== idOrCloudId)
+  const filtered = list.filter((e) => e._id !== _id)
   if (filtered.length !== list.length) {
     wx.setStorageSync(key, filtered)
-    removed = true
   }
   
-  if (removed) {
-    notifyListeners(babyId)
-  }
+  notifyListeners(babyId)
 }
 

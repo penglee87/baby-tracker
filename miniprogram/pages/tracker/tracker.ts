@@ -446,7 +446,7 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
     // --- 列表项操作 (编辑/删除) ---
     openItemActions(e: any) {
       const id = e.currentTarget.dataset.id
-      const item = (this.data.events || []).find((r) => r.id === id || r._id === id)
+      const item = (this.data.events || []).find((r) => r._id === id)
       if (!item) return
       wx.showActionSheet({
         itemList: ['编辑', '删除'],
@@ -458,7 +458,7 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
             const editTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
             this.setData({
               showEditModal: true,
-              editId: item._id || item.id || '',
+              editId: item._id || '',
               editType: (typeof item.type === 'string' ? (item.type as EventType) : 'feed'),
               editTime,
               editQuantity: item.quantity || 0,
@@ -515,11 +515,6 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
         wx.showToast({ title: '类型必填', icon: 'none' })
         return
       }
-      // 如果是编辑已有记录，id不能为空
-      if (this.data.events.some(e => e.id === id || e._id === id) && !id) {
-         // This logic is tricky because we allow empty id for new records.
-         // Let's simplify: if id is empty, it's a new record.
-      }
 
       const ts = this.buildTimestampFromHHMM(this.data.editTime, this.data.editOriginalTimestamp)
       
@@ -539,24 +534,21 @@ Component<TrackerData, {}, TrackerMethod, { _unwatch?: () => void }>({
 
       // 如果有ID，则是更新
       if (id) {
-        const original = (this.data.events || []).find(e => e.id === id || e._id === id)
-        if (original) {
-          if (original._id === id) rec._id = id
-          if (original.id === id) rec.id = id
-        } else {
-           // Fallback
-           if (id.startsWith('6') || id.length >= 20) rec._id = id
-           else rec.id = id
-        }
+        rec._id = id
         updateEvent(rec).then(() => {
           this.setData({ showEditModal: false })
           wx.showToast({ title: '已更新', icon: 'success' })
         })
       } else {
-        // 没有ID，则是新增 (来自计时器结束)
+        // 新增
         addEvent(rec).then(() => {
           this.setData({ showEditModal: false })
-          wx.showToast({ title: '已保存', icon: 'success' })
+          wx.showToast({ title: '已添加', icon: 'success' })
+          
+          // 如果是睡觉，自动更新状态
+          if (rec.type === 'sleep') {
+            this.checkCurrentStatus([rec as EventRecordDisplay, ...this.data.events])
+          }
         })
       }
     },

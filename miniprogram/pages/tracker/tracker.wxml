@@ -91,8 +91,8 @@
   </view>
   <view class="list">
     <view class="list-title">最近记录</view>
-    <block wx:for="{{events}}" wx:key="id">
-      <view class="item" bindtap="openItemActions" data-id="{{item._id || item.id}}">
+    <block wx:for="{{events}}" wx:key="_id">
+      <view class="item" bindtap="openItemActions" data-id="{{item._id}}">
         <text class="time">{{item.timeDisplay}}</text>
         <text class="type">{{item.typeLabel}}</text>
         <block wx:if="{{item.quantity}}">
