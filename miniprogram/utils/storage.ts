@@ -120,6 +120,7 @@ export type BabyProfile = {
     nickName: string
     avatarUrl: string
   }
+  isDeleted?: boolean // 软删除标记
 }
 
 const BABIES_KEY = `${LOCAL_KEY_PREFIX}babies`
@@ -196,8 +197,9 @@ export function updateLocalBaby(baby: BabyProfile) {
 /**
  * 新增或更新宝宝信息
  * 优先同步云端，同时更新本地缓存
+ * @returns boolean 云端同步是否成功
  */
-export async function upsertBaby(baby: BabyProfile) {
+export async function upsertBaby(baby: BabyProfile): Promise<boolean> {
   // 1. 本地更新
   // 如果是新建(本地不存在)，则默认为 owner
   const list = listBabies()
@@ -219,12 +221,39 @@ export async function upsertBaby(baby: BabyProfile) {
       await db.collection('babies').doc(baby.id).set({
         data: {
           ...cloudData,
+          isDeleted: false, // 确保恢复/新建时未删除
           updatedAt: Date.now()
         }
       })
+      return true
     } catch (e) {
       console.error('[Cloud] Sync baby failed:', e)
+      return false
     }
+  }
+  return false
+}
+
+/**
+ * 软删除宝宝 (标记为已删除)
+ * 仅限创建者调用
+ */
+export async function softDeleteBaby(babyId: string): Promise<boolean> {
+  const db = initCloud()
+  if (!db) return false
+  try {
+    await db.collection('babies').doc(babyId).update({
+      data: {
+        isDeleted: true,
+        updatedAt: Date.now()
+      }
+    })
+    // 本地也删除
+    deleteBabyById(babyId)
+    return true
+  } catch (e) {
+    console.error('[Cloud] Soft delete failed:', e)
+    return false
   }
 }
 
@@ -248,17 +277,18 @@ export async function syncBabies() {
     if (res.data) {
        const cloudMyBabies = res.data as BabyProfile[]
        
-       // 更新或添加本地
+       // 更新或添加本地 (过滤掉已删除的)
        cloudMyBabies.forEach(b => {
+          if (b.isDeleted) return
           // 确保 role 正确
           updateLocalBaby({ ...b, role: 'owner' })
        })
        
-       // 检查本地是 owner 但云端不存在的 -> 说明云端已删除
+       // 检查本地是 owner 但云端不存在或已标记删除的 -> 本地移除
        const localOwners = babies.filter(b => b.role === 'owner')
        localOwners.forEach(local => {
-          const existsInCloud = cloudMyBabies.find(cloud => cloud.id === local.id)
-          if (!existsInCloud) {
+          const cloudBaby = cloudMyBabies.find(cloud => cloud.id === local.id)
+          if (!cloudBaby || cloudBaby.isDeleted) {
              deleteBabyById(local.id)
           }
        })
@@ -273,8 +303,14 @@ export async function syncBabies() {
   const memberTasks = members.map(async (b) => {
       try {
         const res = await db.collection('babies').doc(b.id).get()
-        if (res.data) {
-          updateLocalBaby(res.data as BabyProfile)
+        const data = res.data as BabyProfile
+        if (data) {
+          if (data.isDeleted) {
+             console.log(`[Cloud] Baby ${b.id} is deleted, removing locally`)
+             deleteBabyById(b.id)
+          } else {
+             updateLocalBaby(data)
+          }
         }
       } catch (e: any) {
         // 如果明确是记录不存在，则本地删除

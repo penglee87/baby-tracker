@@ -18,7 +18,11 @@ import {
   checkMyJoinStatus,
   syncBabies,
   exitFamily,
+  softDeleteBaby,
 } from '../../utils/storage'
+
+// Avatar cache to avoid redundant network requests
+const avatarCache: Record<string, string> = {}
 
 Component({
   /**
@@ -90,6 +94,7 @@ Component({
       if (wx.cloud) {
         const fileList = babies
           .filter(b => b.avatarUrl && b.avatarUrl.startsWith('cloud://'))
+          .filter(b => !avatarCache[b.avatarUrl!]) // Filter out cached
           .map(b => b.avatarUrl!)
         
         if (fileList.length > 0) {
@@ -97,10 +102,8 @@ Component({
             const res = await wx.cloud.getTempFileURL({ fileList })
             res.fileList.forEach(item => {
               if (item.tempFileURL) {
-                const b = babies.find(x => x.avatarUrl === item.fileID)
-                if (b) b.avatarUrl = item.tempFileURL // 仅更新内存显示，不存回DB
+                 avatarCache[item.fileID] = item.tempFileURL
               } else {
-                // 如果没有 tempFileURL，通常是权限问题
                 showPermissionTip = true
               }
             })
@@ -109,6 +112,13 @@ Component({
             showPermissionTip = true
           }
         }
+
+        // Apply cache to babies list
+        babies.forEach(b => {
+           if (b.avatarUrl && avatarCache[b.avatarUrl]) {
+              b.avatarUrl = avatarCache[b.avatarUrl]
+           }
+        })
       }
 
       const current = babies.find(b => b.id === currentBabyId) || babies[0] || null
@@ -276,6 +286,8 @@ Component({
         editAvatarUrl: b.avatarUrl || '',
         editGender: b.gender || 'boy',
         editBirthday: b.birthday || '',
+        creatorNickName: b.creatorInfo?.nickName || '',
+        creatorAvatarUrl: b.creatorInfo?.avatarUrl || '',
       })
     },
 
@@ -365,6 +377,16 @@ Component({
       const birthday = this.data.editBirthday || ''
 
       const babies = listBabies()
+      
+      // 尝试获取创建者信息 (从 Input 获取)
+      let creatorInfo: any = undefined
+      if (this.data.creatorNickName || this.data.creatorAvatarUrl) {
+        creatorInfo = {
+          nickName: this.data.creatorNickName || '创建者',
+          avatarUrl: this.data.creatorAvatarUrl || ''
+        }
+      }
+
       if (isCreate) {
         if (!id) {
           wx.showToast({ title: '请输入共享码', icon: 'none' })
@@ -375,27 +397,27 @@ Component({
           return
         }
 
-        // 尝试获取创建者信息 (从 Input 获取)
-        let creatorInfo = undefined
-        if (this.data.creatorNickName || this.data.creatorAvatarUrl) {
-          creatorInfo = {
-            nickName: this.data.creatorNickName || '创建者',
-            avatarUrl: this.data.creatorAvatarUrl || ''
-          }
-        }
-
-        upsertBaby({ id, name, avatarUrl, gender, birthday, creatorInfo })
+        upsertBaby({ id, name, avatarUrl, gender, birthday, creatorInfo }).then(success => {
+           if (!success) {
+              wx.showToast({ title: '保存成功(未同步云端)', icon: 'none' })
+           } else {
+              wx.showToast({ title: '已创建', icon: 'success' })
+           }
+        })
         this.refresh()
         this.setData({ showEditModal: false })
-        wx.showToast({ title: '已创建', icon: 'success' })
       } else {
         if (!id) return
-        // 更新时也可以尝试补充 creatorInfo，如果是 owner
-        // 但这里为了简化，暂时只在创建时强制尝试获取
-        upsertBaby({ id, name, avatarUrl, gender, birthday })
+        // 更新时同时也更新 creatorInfo (如果是 owner)
+        upsertBaby({ id, name, avatarUrl, gender, birthday, creatorInfo }).then(success => {
+           if (!success) {
+              wx.showToast({ title: '保存成功(未同步云端)', icon: 'none' })
+           } else {
+              wx.showToast({ title: '已更新', icon: 'success' })
+           }
+        })
         this.refresh()
         this.setData({ showEditModal: false })
-        wx.showToast({ title: '已更新', icon: 'success' })
       }
     },
 
@@ -422,11 +444,11 @@ Component({
       const baby = babies.find(b => b.id === id)
       const isMember = baby?.role === 'member'
       
-      const title = isMember ? '退出家庭' : '移除确认'
+      const title = isMember ? '退出家庭' : '删除确认'
       const content = isMember 
          ? '确定要退出该家庭吗？\n退出后将无法查看宝宝记录，需重新申请加入。'
-         : '确定要从您的列表中移除该宝宝吗？\n(云端数据将保留，不影响其他家庭成员)'
-      const confirmText = isMember ? '退出' : '移除'
+         : '确定要删除该宝宝档案吗？\n删除后所有家庭成员将无法查看，数据将被标记为已删除。'
+      const confirmText = isMember ? '退出' : '删除'
       
       wx.showModal({
         title,
@@ -446,9 +468,15 @@ Component({
                  wx.showToast({ title: '退出失败，请重试', icon: 'none' })
                }
             } else {
-               deleteBabyById(id)
-               this.refresh()
-               wx.showToast({ title: '已移除', icon: 'success' })
+               wx.showLoading({ title: '删除中...' })
+               const success = await softDeleteBaby(id)
+               wx.hideLoading()
+               if (success) {
+                  wx.showToast({ title: '已删除', icon: 'success' })
+                  this.refresh()
+               } else {
+                  wx.showToast({ title: '删除失败，请检查网络', icon: 'none' })
+               }
             }
             
             // Close edit modal if open
@@ -458,6 +486,24 @@ Component({
           }
         },
       })
+    },
+
+    /**
+     * 下拉刷新
+     */
+    async onPullDownRefresh() {
+       wx.showNavigationBarLoading()
+       try {
+          await checkMyJoinStatus()
+          await syncBabies()
+          await this.refresh()
+          wx.showToast({ title: '已同步最新数据', icon: 'none' })
+       } catch (e) {
+          console.error('Pull down refresh failed:', e)
+       } finally {
+          wx.hideNavigationBarLoading()
+          wx.stopPullDownRefresh()
+       }
     },
   },
 
